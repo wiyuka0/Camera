@@ -5,7 +5,7 @@ import com.methyleneblue.camera.obj.raytrace.LightMaterial
 import com.methyleneblue.camera.obj.raytrace.getLight
 import com.methyleneblue.camera.obj.raytrace.getReflectionMaterialData
 import com.methyleneblue.camera.obj.raytrace.isLight
-import com.sun.java.swing.plaf.windows.resources.windows_zh_CN
+import com.methyleneblue.camera.obj.texture.TextureManager
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
@@ -28,7 +28,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import kotlin.math.exp
-import kotlin.math.pow
 import kotlin.math.tan
 
 class RayTraceCamera(
@@ -392,86 +391,105 @@ class RayTraceCamera(
 
         return true
     }
-    fun getColorInWorldTexture(rayTraceResult: RayTraceResult?): Color? {
-        val texturesPath = File(Bukkit.getPluginsFolder().path + "\\Camera\\textures")
-        if (!texturesPath.exists()) texturesPath.mkdirs()
 
-        if(rayTraceResult == null) return null
+    fun getColorInWorldTexture(rayTraceResult: RayTraceResult?): Color? {
+        if (rayTraceResult == null) return null
 
         val hitBlock = rayTraceResult.hitBlock ?: return null
         val hitFace = rayTraceResult.hitBlockFace ?: return null
-        val hitBlockNamespaceKey = hitBlock.type.toString().lowercase(Locale.getDefault())
+        val material = hitBlock.type
 
-        var textureFileName = "$hitBlockNamespaceKey.png"
-        var textureFile = File(texturesPath, textureFileName)
-
-        if (!textureFile.exists()) {
-            val hitFaceKey = when (hitFace) {
-                UP -> "top"
-                DOWN -> "bottom"
-                else -> hitFace.name.lowercase(Locale.getDefault())
-            }
-
-            textureFileName = "${hitBlockNamespaceKey}_$hitFaceKey.png"
-            textureFile = File(texturesPath, textureFileName)
-
-            if (!textureFile.exists()) {
-                textureFileName = "${hitBlockNamespaceKey}_side.png"
-                textureFile = File(texturesPath, textureFileName)
-
-                if (!textureFile.exists()) return null
-            }
-        }
-
-        // 使用缓存，key 是完整文件路径
-        val image = textureCache.computeIfAbsent(textureFile.absolutePath) {
-            ImageIO.read(textureFile)
-        }
+        val image = TextureManager.getTexture(material, hitFace) ?: return null
 
         val relativeHit = rayTraceResult.hitPosition.subtract(hitBlock.location.toVector())
         val x = relativeHit.x.toFloat()
         val y = relativeHit.y.toFloat()
         val z = relativeHit.z.toFloat()
-        val texX: Float
-        val texY: Float
-        val width = image.width.toFloat()
-        val height = image.height.toFloat()
 
-        when (hitFace) {
-            NORTH -> {
-                texX = (1f - x) * width
-                texY = (1f - y) * height
-            }
-            SOUTH -> {
-                texX = x * width
-                texY = (1f - y) * height
-            }
-            EAST -> {
-                texX = (1f - z) * width
-                texY = (1f - y) * height
-            }
-            WEST -> {
-                texX = z * width
-                texY = (1f - y) * height
-            }
-            UP -> {
-                texX = x * width
-                texY = (1f - z) * height
-            }
-            DOWN -> {
-                texX = x * width
-                texY = z * height
-            }
-            else -> return null
-        }
+        val (texX, texY) = TextureManager.getTextureCoords(
+            hitFace, x, y, z, image.width, image.height
+        )
 
-        val clampedX = texX.coerceIn(0f, width - 1)
-        val clampedY = texY.coerceIn(0f, height - 1)
-
-        val baseColor = Color(image.getRGB(clampedX.toInt(), clampedY.toInt()))
-        return baseColor
-
+        return Color(image.getRGB(texX, texY))
     }
+//
+//        val texturesPath = File(Bukkit.getPluginsFolder().path + "\\Camera\\textures")
+//        if (!texturesPath.exists()) texturesPath.mkdirs()
+//
+//        if(rayTraceResult == null) return null
+//
+//        val hitBlock = rayTraceResult.hitBlock ?: return null
+//        val hitFace = rayTraceResult.hitBlockFace ?: return null
+//        val hitBlockNamespaceKey = hitBlock.type.toString().lowercase(Locale.getDefault())
+//
+//        var textureFileName = "$hitBlockNamespaceKey.png"
+//        var textureFile = File(texturesPath, textureFileName)
+//
+//        if (!textureFile.exists()) {
+//            val hitFaceKey = when (hitFace) {
+//                UP -> "top"
+//                DOWN -> "bottom"
+//                else -> hitFace.name.lowercase(Locale.getDefault())
+//            }
+//
+//            textureFileName = "${hitBlockNamespaceKey}_$hitFaceKey.png"
+//            textureFile = File(texturesPath, textureFileName)
+//
+//            if (!textureFile.exists()) {
+//                textureFileName = "${hitBlockNamespaceKey}_side.png"
+//                textureFile = File(texturesPath, textureFileName)
+//
+//                if (!textureFile.exists()) return null
+//            }
+//        }
+//
+//        // 使用缓存，key 是完整文件路径
+//        val image = textureCache.computeIfAbsent(textureFile.absolutePath) {
+//            ImageIO.read(textureFile)
+//        }
+//
+//        val relativeHit = rayTraceResult.hitPosition.subtract(hitBlock.location.toVector())
+//        val x = relativeHit.x.toFloat()
+//        val y = relativeHit.y.toFloat()
+//        val z = relativeHit.z.toFloat()
+//        val texX: Float
+//        val texY: Float
+//        val width = image.width.toFloat()
+//        val height = image.height.toFloat()
+//
+//        when (hitFace) {
+//            NORTH -> {
+//                texX = (1f - x) * width
+//                texY = (1f - y) * height
+//            }
+//            SOUTH -> {
+//                texX = x * width
+//                texY = (1f - y) * height
+//            }
+//            EAST -> {
+//                texX = (1f - z) * width
+//                texY = (1f - y) * height
+//            }
+//            WEST -> {
+//                texX = z * width
+//                texY = (1f - y) * height
+//            }
+//            UP -> {
+//                texX = x * width
+//                texY = (1f - z) * height
+//            }
+//            DOWN -> {
+//                texX = x * width
+//                texY = z * height
+//            }
+//            else -> return null
+//        }
+//
+//        val clampedX = texX.coerceIn(0f, width - 1)
+//        val clampedY = texY.coerceIn(0f, height - 1)
+//
+//        val baseColor = Color(image.getRGB(clampedX.toInt(), clampedY.toInt()))
+//        return baseColor
     /** TODO:
      *   全局信息: 最大反射次数s
      *             每条射线均有一个Wc(Wr, Wg, Wb) 和一个 Wx

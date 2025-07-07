@@ -14,17 +14,19 @@ class TakePicture: CommandExecutor {
         Thread {
             val cameraId = p3[0].toInt()
             val cameraInstance = CameraManager.getCamera(cameraId)
-            p0.sendMessage("Generating Picture...")
-            val start = System.currentTimeMillis();
-            cameraInstance?.updateCamera(p0 as Player)
-            val end = System.currentTimeMillis()
 
-            val duration = end - start
-            p0.sendMessage("Finished generate in time $duration ms")
             if (cameraInstance == null) {
                 p0.sendMessage("No Camera")
                 return@Thread
             }
+
+            p0.sendMessage("Generating Picture...")
+            val start = System.currentTimeMillis();
+            cameraInstance.updateCamera(p0 as Player)
+            val end = System.currentTimeMillis()
+            val duration = end - start
+            p0.sendMessage("Finished generate in time $duration ms")
+
             val path = p3[1]
             val file = File(path)
             val fileName = p3[2]
