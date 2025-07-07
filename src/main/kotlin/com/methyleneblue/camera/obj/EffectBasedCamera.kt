@@ -59,7 +59,7 @@ class EffectBasedCamera(
 //        return image
 //    }
 
-    override fun updateCamera(player: Player?): BufferedImage {
+    override fun updateCamera(player: Player?, mixinTimes: Int): BufferedImage {
         val width = size.first
         val height = size.second
         val aspectRatio = width.toFloat() / height.toFloat()

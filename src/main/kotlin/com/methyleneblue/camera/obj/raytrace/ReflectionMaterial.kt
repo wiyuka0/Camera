@@ -68,7 +68,7 @@ class ReflectionMaterial(
 
 
         val METAL = ReflectionMaterial(0.15, 4, ::linear, arrayOf())
-        val ABSOLUTELY_SMOOTH = ReflectionMaterial(0.0, 1, ::linear, arrayOf())
+        val MIRROR = ReflectionMaterial(0.0, 1, ::linear, arrayOf())
         val MATTE = ReflectionMaterial(1.0, 10, ::cos, arrayOf())
 
         val IRON_BLOCK = ReflectionMaterial(0.2, 4,  ::linear, arrayOf()) // 散射率，射线数量，反射射线权重函数，权重函数参数
@@ -84,24 +84,6 @@ class ReflectionMaterial(
             }
         }
     }
-
-    constructor(
-        spread: Double,
-        reflectionTimes: Int,
-        func: (args: Array<Double>) -> Double,
-        elseArgs: Array<Double>,
-        a: Int
-    ) : this(spread, reflectionTimes, func, elseArgs)  {
-
-    }
-
-    contructor(spread: Double,
-                reflectionTimes: Int,
-                func: (args: Array<Double>) -> Double = ::linear,
-                elseArgs: Array<Double> = arrayOf()) : this(spread, reflection, func, elseArgs) {
-
-    }
-
     fun weight(x: Double): Double {
         return func.invoke(arrayOf(x) + elseArgs)
     }

@@ -9,7 +9,8 @@ import kotlin.random.Random
 object VectorUtil {
     fun getReflectedVector(
         incident: Vector3f,
-        planeNormal: Vector3f
+        planeNormal: Vector3f,
+        output: Vector3f? = null,
     ): Vector3f {val normal = Vector3f(planeNormal).normalize()
         if (normal.length().isNaN()) {
             throw IllegalArgumentException("Plane normal cannot be zero vector")
@@ -20,6 +21,9 @@ object VectorUtil {
         val reflection = Vector3f(incident)
         val temp = Vector3f(normal).mul(2 * dot)
         reflection.sub(temp)
+        output?.x = reflection.x
+        output?.y = reflection.y
+        output?.z = reflection.z
 
         return reflection
     }
@@ -44,6 +48,22 @@ object VectorUtil {
         return Math.toDegrees(acos(clampedCos.toDouble())).toFloat()
     }
 
+    val faceToNormalMap = hashMapOf<BlockFace, Vector3f>().apply {
+        this[BlockFace.UP] = Vector3f(0f, 1f, 0f)
+        this[BlockFace.DOWN] = Vector3f(0f, -1f, 0f)
+        this[BlockFace.NORTH] = Vector3f(0f, 0f, -1f)
+        this[BlockFace.SOUTH] = Vector3f(0f, 0f, 1f)
+        this[BlockFace.EAST] = Vector3f(1f, 0f, 0f)
+        this[BlockFace.WEST] = Vector3f(-1f, 0f, 0f)
+
+        this[BlockFace.NORTH_EAST] = Vector3f(1f, 0f, -1f).normalize()
+        this[BlockFace.NORTH_WEST] = Vector3f(-1f, 0f, -1f).normalize()
+        this[BlockFace.SOUTH_EAST] = Vector3f(1f, 0f, 1f).normalize()
+        this[BlockFace.SOUTH_WEST] = Vector3f(-1f, 0f, 1f).normalize()
+
+        this[BlockFace.SELF] = Vector3f(0f, 0f, 0f).normalize()
+    }
+
     fun normalFromBlockFace(face: BlockFace): Vector3f {
         return when (face) {
             BlockFace.UP       -> Vector3f(0f, 1f, 0f)
@@ -63,7 +83,7 @@ object VectorUtil {
         }
     }
 
-    fun perturbDirection(base: Vector3f, spread: Double): Vector3f {
+    fun perturbDirection(base: Vector3f, spread: Double, output: Vector3f? = null): Vector3f {
         require(spread in 0.0..1.0)
 
         if (spread == 0.0) return Vector3f(base).normalize()
@@ -88,7 +108,20 @@ object VectorUtil {
         val localDirection = Vector3f(x, y, z)
 
         // Step 2: Rotate local vector to align with `base`
-        return rotateVectorFromZAxis(localDirection, base).normalize()
+        return if(output == null) {
+            rotateVectorFromZAxis(localDirection, base)
+            /**
+             * [22:45:56 WARN]: Exception in thread "Thread-17" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3
+             * [22:45:56 WARN]: 	at Camera-1.0-SNAPSHOT.jar//com.methyleneblue.camera.command.TakePicture.onCommand$lambda$0(TakePicture.kt:25)
+             * [22:45:56 WARN]: 	at java.base/java.lang.Thread.run(Thread.java:1570)
+             */
+        } else {
+            val normalize = rotateVectorFromZAxis(localDirection, base).normalize()
+            output.x = normalize.x
+            output.y = normalize.y
+            output.z = normalize.z
+            output!!
+        }
     }
 
     // Uniform random unit vector on the whole sphere
