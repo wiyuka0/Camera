@@ -22,6 +22,7 @@ class TakePicture: CommandExecutor {
 
             p0.sendMessage("Generating Picture...")
             val start = System.currentTimeMillis();
+            val mixinTimes = p3[3].toInt()
             cameraInstance.updateCamera(p0 as Player)
             val end = System.currentTimeMillis()
             val duration = end - start

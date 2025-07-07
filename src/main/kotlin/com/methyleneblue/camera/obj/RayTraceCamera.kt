@@ -8,14 +8,7 @@ import com.methyleneblue.camera.obj.raytrace.isLight
 import com.methyleneblue.camera.obj.texture.TextureManager
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
-import org.bukkit.Bukkit
 import org.bukkit.Location
-import org.bukkit.block.BlockFace.DOWN
-import org.bukkit.block.BlockFace.EAST
-import org.bukkit.block.BlockFace.NORTH
-import org.bukkit.block.BlockFace.SOUTH
-import org.bukkit.block.BlockFace.UP
-import org.bukkit.block.BlockFace.WEST
 import org.bukkit.entity.Player
 import org.bukkit.util.RayTraceResult
 import org.bukkit.util.Vector
@@ -23,10 +16,11 @@ import org.joml.Vector3f
 import org.joml.Vector3i
 import java.awt.Color
 import java.awt.image.BufferedImage
-import java.io.File
-import java.util.Locale
+import java.lang.reflect.Array.set
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import javax.imageio.ImageIO
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Executors
 import kotlin.math.exp
 import kotlin.math.tan
 
@@ -43,8 +37,23 @@ class RayTraceCamera(
     distance,
     bufferedImage,
 ) {
+    companion object {
+        private val executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+        private val vectorPool = VectorPool()
 
-    override fun updateCamera(player: Player?): BufferedImage {
+        class VectorPool {
+            private val pool = ConcurrentLinkedQueue<Vector>()
+
+            fun alloc(): Vector = pool.poll() ?: Vector()
+
+            fun free(vector: Vector) {
+                vector.zero()
+                pool.offer(vector)
+            }
+        }
+    }
+
+    override fun updateCamera(player: Player?, mixinTimes: Int): BufferedImage {
         val width = size.first
         val height = size.second
         val aspectRatio = width.toFloat() / height.toFloat()
@@ -73,12 +82,12 @@ class RayTraceCamera(
             progressBar = BossBar.bossBar(Component.text("渲染进度"), 0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS)
             player.showBossBar(progressBar)
         }
-
+        val futures = mutableListOf<CompletableFuture<Void>>()
         for (t in 0 until numThreads) {
             val startRow = t * rowsPerThread
             val endRow = if (t == numThreads - 1) height else (t + 1) * rowsPerThread
-
-            val thread = Thread {
+            
+            futures.add(CompletableFuture.runAsync({
                 for (j in startRow until endRow) {
                     val v = (1.0 - (j + 0.5) / height) * 2 - 1
                     for (i in 0 until width) {
@@ -86,23 +95,73 @@ class RayTraceCamera(
                         currentRayTraceCount += 1
                         if(currentRayTraceCount % 10000 == 0) progressBar?.progress((currentRayTraceCount.toFloat() / totalRayTraceCount.toFloat()).toFloat())
 
-                        val dir = forward.clone()
-                            .add(right.clone().multiply(u * halfWidth))
-                            .add(up.clone().multiply(v * halfHeight))
-                            .normalize()
+                        val dir = vectorPool.alloc().apply {
+//                            set(forward)
+
+                            setX(forward.x)
+                            setY(forward.y)
+                            setZ(forward.z)
+
+                            val rightOffset = vectorPool.alloc().apply {
+//                                set(right)
+                                setX(right.x)
+                                setY(right.y)
+                                setZ(right.z)
+
+                                multiply(u * halfWidth)
+                            }
+                            add(rightOffset)
+                            vectorPool.free(rightOffset)
+
+                            val upOffset = vectorPool.alloc().apply {
+//                                set(up)
+                                setX(up.x)
+                                setY(up.y)
+                                setZ(up.z)
+                                multiply(v * halfHeight)
+                            }
+
+                            add(upOffset)
+                            vectorPool.free(upOffset)
+
+                            normalize()
+                        }
 
                         val result = location.world.rayTraceBlocks(location, dir, distance)
-                        val color = getColorInWorld(result, dir.toVector3f())
-                        image.setRGB(i, j, color.rgb)
+                        var rSum = 0
+                        var gSum = 0
+                        var bSum = 0
+
+                        repeat (mixinTimes){
+                            val color = getColorInWorld(result, dir.toVector3f())
+                            rSum += color.red
+                            gSum += color.green
+                            bSum += color.blue
+                        }
+
+                        vectorPool.free(dir)
+
+                        val rAvg = rSum / mixinTimes
+                        val gAvg = gSum / mixinTimes
+                        val bAvg = bSum / mixinTimes
+                        try{
+                            image.setRGB(i, j, Color(rAvg, gAvg, bAvg).rgb)
+                        }catch (e: Exception){
+                            image.setRGB(i, j, Color.BLACK.rgb)
+                        }
                     }
                 }
-            }
-            thread.start()
-            threads.add(thread)
+            }, executor))
+            //喵？可以直接用executors.submit的喵
+            // futures.add(future)
+            // threads.add(thread)
         }
 
+//        CompletableFuture.allOf(arrayOf(futures))
+//        CompletableFuture.allOf(futures.toArray<CompletableFuture<Void>>()).join()
+
         // 等待所有线程完成
-        threads.forEach { it.join() }
+        // threads.forEach { it.join() }
 
         progressBar?.let { player?.hideBossBar(it) }
 
@@ -209,29 +268,39 @@ class RayTraceCamera(
 
         return image
     }
-    fun applyBilateralFilter(input: BufferedImage, diameter: Int = 3, sigmaColor: Float = 25f, sigmaSpace: Float = 3f): BufferedImage {
-        val width = input.width
-        val height = input.height
-        val output = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
 
-        val radius = diameter / 2
-        val sigmaColor2 = 2 * sigmaColor * sigmaColor
-        val sigmaSpace2 = 2 * sigmaSpace * sigmaSpace
+    private fun processBilateralChunk(
+        input: BufferedImage,
+        output: BufferedImage,
+        chunkStartY: Int,
+        chunkEndY: Int,
+        outputStartY: Int,
+        outputEndY: Int,
+        width: Int,
+        radius: Int,
+        sigmaColor2: Float,
+        sigmaSpace2: Float
+    ) {
+        val pixels = Array(chunkEndY - chunkStartY + 1) { offset ->
+            IntArray(width) { x ->
+                input.getRGB(x, offset + chunkStartY)
+            }
+        }
 
-        for (y in 0 until height) {
+        for (y in outputStartY until outputEndY) {
             for (x in 0 until width) {
+                val centerColor = Color(pixels[y - chunkStartY][x])
+
                 var rSum = 0f
                 var gSum = 0f
                 var bSum = 0f
                 var weightSum = 0f
 
-                val centerColor = Color(input.getRGB(x, y))
-
-                for (dy in -radius..radius) {
-                    for (dx in -radius..radius) {
-                        val nx = (x + dx).coerceIn(0, width - 1)
-                        val ny = (y + dy).coerceIn(0, height - 1)
-                        val neighborColor = Color(input.getRGB(nx, ny))
+                for (dy in ((-radius).coerceAtLeast(chunkEndY - y))..(radius.coerceAtMost(chunkStartY - y))) {
+                    val ny = y + dy
+                    for (dx in -(radius.coerceAtLeast(width - x))..(radius.coerceAtMost(-x))) {
+                        val nx = x + dx
+                        val neighborColor = Color(pixels[ny - chunkStartY][nx])
 
                         // 颜色差
                         val dr = neighborColor.red - centerColor.red
@@ -252,12 +321,52 @@ class RayTraceCamera(
                     }
                 }
 
-                val r = (rSum / weightSum).toInt().coerceIn(0, 255)
-                val g = (gSum / weightSum).toInt().coerceIn(0, 255)
-                val b = (bSum / weightSum).toInt().coerceIn(0, 255)
+                if (weightSum > 0.001f) {
+                    val r = (rSum / weightSum).toInt().coerceIn(0, 255)
+                    val g = (gSum / weightSum).toInt().coerceIn(0, 255)
+                    val b = (bSum / weightSum).toInt().coerceIn(0, 255)
 
-                output.setRGB(x, y, Color(r, g, b).rgb)
+                    output.setRGB(x, y, Color(r, g, b).rgb)
+                } else {
+                    output.setRGB(x, y, centerColor.rgb)
+                }
             }
+        }
+    }
+
+    fun applyBilateralFilter(input: BufferedImage, diameter: Int = 3, sigmaColor: Float = 25f, sigmaSpace: Float = 3f): BufferedImage {
+        val width = input.width
+        val height = input.height
+        val output = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+        val radius = diameter / 2
+        val sigmaColor2 = 2 * sigmaColor * sigmaColor
+        val sigmaSpace2 = 2 * sigmaSpace * sigmaSpace
+
+        val chunks = (Runtime.getRuntime().availableProcessors() * 2).coerceIn(4, 16)
+        val chunkHeight = (height / chunks).coerceAtLeast(1)
+        val futures = mutableListOf<CompletableFuture<Void>>()
+
+        for (i in 0 until chunks) {
+            val startY = i * chunkHeight
+            var endY = (i + 1) * chunkHeight
+
+            if (i == chunks - 1) {
+                endY = height
+            }
+
+            val chunkStartY = (startY - radius).coerceAtLeast(0)
+            val chunkEndY = (endY + radius).coerceAtMost(height - 1)
+
+            futures.add(CompletableFuture.runAsync({
+                processBilateralChunk(
+                    input, output,
+                    chunkStartY, chunkEndY,
+                    startY, endY,
+                    width, radius,
+                    sigmaColor2, sigmaSpace2
+                )
+            }, executor))
         }
 
         return output
@@ -313,7 +422,7 @@ class RayTraceCamera(
             globalColorList.add(colorData)
             return true
         }
-        if(reflectionTimes > maxReflectionTimes) {
+        if(reflectionTimes > maxReflectionTimes || parentRayTraceData.wx < 0.001f) {
             return false
         }
 
@@ -340,12 +449,6 @@ class RayTraceCamera(
 
         val k = 1.0
         val reflectionTimesWeight = (maxReflectionTimes.toFloat() - reflectionTimes.toFloat()) * k
-
-        if(reflectionTimesWeight < 0.0001) {
-//            val lightColor = getColorInWorldTexture(rayTraceResult)
-//            LightMaterial.colorBleaching(lightColor!!, light.brightness.toDouble())
-            return false
-        }
 
         val totals = hitMaterial.reflectionTimes
         var misses = 0
@@ -412,84 +515,7 @@ class RayTraceCamera(
 
         return Color(image.getRGB(texX, texY))
     }
-//
-//        val texturesPath = File(Bukkit.getPluginsFolder().path + "\\Camera\\textures")
-//        if (!texturesPath.exists()) texturesPath.mkdirs()
-//
-//        if(rayTraceResult == null) return null
-//
-//        val hitBlock = rayTraceResult.hitBlock ?: return null
-//        val hitFace = rayTraceResult.hitBlockFace ?: return null
-//        val hitBlockNamespaceKey = hitBlock.type.toString().lowercase(Locale.getDefault())
-//
-//        var textureFileName = "$hitBlockNamespaceKey.png"
-//        var textureFile = File(texturesPath, textureFileName)
-//
-//        if (!textureFile.exists()) {
-//            val hitFaceKey = when (hitFace) {
-//                UP -> "top"
-//                DOWN -> "bottom"
-//                else -> hitFace.name.lowercase(Locale.getDefault())
-//            }
-//
-//            textureFileName = "${hitBlockNamespaceKey}_$hitFaceKey.png"
-//            textureFile = File(texturesPath, textureFileName)
-//
-//            if (!textureFile.exists()) {
-//                textureFileName = "${hitBlockNamespaceKey}_side.png"
-//                textureFile = File(texturesPath, textureFileName)
-//
-//                if (!textureFile.exists()) return null
-//            }
-//        }
-//
-//        // 使用缓存，key 是完整文件路径
-//        val image = textureCache.computeIfAbsent(textureFile.absolutePath) {
-//            ImageIO.read(textureFile)
-//        }
-//
-//        val relativeHit = rayTraceResult.hitPosition.subtract(hitBlock.location.toVector())
-//        val x = relativeHit.x.toFloat()
-//        val y = relativeHit.y.toFloat()
-//        val z = relativeHit.z.toFloat()
-//        val texX: Float
-//        val texY: Float
-//        val width = image.width.toFloat()
-//        val height = image.height.toFloat()
-//
-//        when (hitFace) {
-//            NORTH -> {
-//                texX = (1f - x) * width
-//                texY = (1f - y) * height
-//            }
-//            SOUTH -> {
-//                texX = x * width
-//                texY = (1f - y) * height
-//            }
-//            EAST -> {
-//                texX = (1f - z) * width
-//                texY = (1f - y) * height
-//            }
-//            WEST -> {
-//                texX = z * width
-//                texY = (1f - y) * height
-//            }
-//            UP -> {
-//                texX = x * width
-//                texY = (1f - z) * height
-//            }
-//            DOWN -> {
-//                texX = x * width
-//                texY = z * height
-//            }
-//            else -> return null
-//        }
-//
-//        val clampedX = texX.coerceIn(0f, width - 1)
-//        val clampedY = texY.coerceIn(0f, height - 1)
-//
-//        val baseColor = Color(image.getRGB(clampedX.toInt(), clampedY.toInt()))
-//        return baseColor
+
     /** TODO:
      *   全局信息: 最大反射次数s
      *             每条射线均有一个Wc(Wr, Wg, Wb) 和一个 Wx

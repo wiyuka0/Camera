@@ -13,7 +13,7 @@ abstract class CameraObject(
     var bufferedImage: BufferedImage,
 ) {
 
-    abstract fun updateCamera(player: Player?): BufferedImage
+    abstract fun updateCamera(player: Player?, mixinTimes: Int = 1): BufferedImage
 
     fun skyColor(time: Long): Color {
         val times = longArrayOf(
