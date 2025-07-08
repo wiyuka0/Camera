@@ -70,6 +70,7 @@ class ReflectionMaterial(
         val METAL = ReflectionMaterial(0.15, 4, ::linear, arrayOf())
         val MIRROR = ReflectionMaterial(0.0, 1, ::linear, arrayOf())
         val MATTE = ReflectionMaterial(1.0, 10, ::cos, arrayOf())
+        val DIAMOND = ReflectionMaterial(0.05, 3, ::linear, arrayOf())
 
         val IRON_BLOCK = ReflectionMaterial(0.2, 4,  ::linear, arrayOf()) // 散射率，射线数量，反射射线权重函数，权重函数参数
         val GOLD_BLOCK = ReflectionMaterial(0.1, 4, ::linear, arrayOf())
@@ -80,6 +81,7 @@ class ReflectionMaterial(
             return when (material) {
                 Material.IRON_BLOCK -> IRON_BLOCK
                 Material.GOLD_BLOCK -> GOLD_BLOCK
+                Material.DIAMOND_BLOCK -> DIAMOND
                 else -> defaultReflectionMaterial
             }
         }

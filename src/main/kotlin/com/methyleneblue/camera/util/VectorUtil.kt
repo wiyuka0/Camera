@@ -1,9 +1,14 @@
-package com.methyleneblue.camera
+package com.methyleneblue.camera.util
 
 import org.bukkit.block.BlockFace
 import org.joml.Vector3f
-import kotlin.isNaN
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.acos
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 object VectorUtil {
@@ -83,7 +88,7 @@ object VectorUtil {
         }
     }
 
-    fun perturbDirection(base: Vector3f, spread: Double, output: Vector3f? = null): Vector3f {
+    fun  perturbDirection(base: Vector3f, spread: Double, output: Vector3f? = null): Vector3f {
         require(spread in 0.0..1.0)
 
         if (spread == 0.0) return Vector3f(base).normalize()
@@ -96,9 +101,9 @@ object VectorUtil {
         val coneAngle = spread * PI / 2  // spread = 1.0 → 90°, max
 
         // Step 1: Sample uniformly in cone
-        val cosTheta = lerp(1.0, cos(coneAngle), Random.nextDouble())
+        val cosTheta = lerp(1.0, cos(coneAngle), Random.Default.nextDouble())
         val sinTheta = sqrt(1.0 - cosTheta * cosTheta)
-        val phi = Random.nextDouble(0.0, 2 * PI)
+        val phi = Random.Default.nextDouble(0.0, 2 * PI)
 
         // Local direction in Z-up space
         val x = (cos(phi) * sinTheta).toFloat()
@@ -126,8 +131,8 @@ object VectorUtil {
 
     // Uniform random unit vector on the whole sphere
     fun randomUnitVector(): Vector3f {
-        val theta = Random.nextDouble(0.0, 2 * PI)
-        val z = Random.nextDouble(-1.0, 1.0)
+        val theta = Random.Default.nextDouble(0.0, 2 * PI)
+        val z = Random.Default.nextDouble(-1.0, 1.0)
         val r = sqrt(1.0 - z * z)
         return Vector3f(
             (r * cos(theta)).toFloat(),

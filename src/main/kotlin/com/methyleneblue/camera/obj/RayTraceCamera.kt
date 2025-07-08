@@ -1,6 +1,6 @@
 package com.methyleneblue.camera.obj
 
-import com.methyleneblue.camera.VectorUtil
+import com.methyleneblue.camera.util.VectorUtil
 import com.methyleneblue.camera.obj.raytrace.LightMaterial
 import com.methyleneblue.camera.obj.raytrace.getLight
 import com.methyleneblue.camera.obj.raytrace.getReflectionMaterialData
@@ -8,6 +8,7 @@ import com.methyleneblue.camera.obj.raytrace.isLight
 import com.methyleneblue.camera.obj.texture.TextureManager
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import org.bukkit.util.RayTraceResult
@@ -18,8 +19,8 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.exp
-import kotlin.math.max
 import kotlin.math.tan
 
 class RayTraceCamera(
@@ -46,7 +47,6 @@ class RayTraceCamera(
         val aspectRatio = width.toFloat() / height.toFloat()
         val fovRad = Math.toRadians(fov.toDouble())
 
-        var image = bufferedImage
         val forward = location.direction.normalize()
         val upVector = Vector(0.0, 1.0, 0.0)
         val right = forward.clone().crossProduct(upVector).normalize()
@@ -59,32 +59,37 @@ class RayTraceCamera(
         val rowsPerThread = height / numThreads
 
         val totalRayTraceCount = width * height
-        var currentRayTraceCount = 0
+        val totalRayTraceCountFloat = totalRayTraceCount.toFloat()
 
         val useBossBar = player != null
 
         var progressBar: BossBar? = null
         if(useBossBar) {
             progressBar = BossBar.bossBar(Component.text("渲染进度"), 0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS)
-            player.showBossBar(progressBar)
+            for (player in Bukkit.getOnlinePlayers()) {
+                if (player.isOp) {
+                    player.showBossBar(progressBar)
+                }
+            }
         }
 
-        // 其实感觉滤波可以不用了，有多重采样的话噪点会平滑一点
+        var currentRayTraceCount = AtomicInteger(0)
+        val results = Array<BufferedImage?>(numThreads) { null }
         val futures = mutableListOf<CompletableFuture<Void>>()
-
         for (t in 0 until numThreads) {
             val startRow = t * rowsPerThread
             val endRow = if (t == numThreads - 1) height else (t + 1) * rowsPerThread
-            
+
             futures.add(CompletableFuture.runAsync({
+                val threadImage = BufferedImage(width, endRow - startRow, BufferedImage.TYPE_INT_RGB)
                 for (j in startRow until endRow) {
                     val v = (1.0 - (j + 0.5) / height) * 2 - 1
                     for (i in 0 until width) {
                         val u = ((i + 0.5) / width) * 2 - 1
-                        currentRayTraceCount += 1
-                        if(currentRayTraceCount % 10000 == 0) progressBar?.progress((currentRayTraceCount.toFloat() / totalRayTraceCount.toFloat()).toFloat())
+                        val count = currentRayTraceCount.incrementAndGet()
+                        if(count % 10000 == 0 && useBossBar) progressBar?.progress((count.toFloat() / totalRayTraceCountFloat).toFloat())
 
-                        val dir = forward.add(right.multiply(u * halfWidth)).add(up.multiply(v * halfHeight)).normalize()
+                        val dir = forward.clone().add(right.clone().multiply(u * halfWidth)).add(up.clone().multiply(v * halfHeight)).normalize()
 
                         val result = location.world.rayTraceBlocks(location, dir, distance)
                         var rSum = 0
@@ -102,28 +107,42 @@ class RayTraceCamera(
                         val gAvg = gSum / mixinTimes
                         val bAvg = bSum / mixinTimes
                         try{
-                            image.setRGB(i, j, Color(rAvg, gAvg, bAvg).rgb)
+                            threadImage.setRGB(i, j - startRow, Color(rAvg, gAvg, bAvg).rgb)
                         }catch (_: Exception){
-                            image.setRGB(i, j, Color.BLACK.rgb)
+                            threadImage.setRGB(i, j - startRow, Color.BLACK.rgb)
                         }
                     }
                 }
+                results[t] = threadImage
             }, executor))
         }
 
         futures.forEach { it.join() }
 
-        progressBar?.let { player?.hideBossBar(it) }
+        var finalImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val g = finalImage.graphics
+        for (t in 0 until numThreads) {
+            val startRow = t * rowsPerThread
+            g.drawImage(results[t], 0, startRow, null)
+        }
+        g.dispose()
 
-        image = applyBilateralFilter(image)
-        bufferedImage = image
+        progressBar?.let {
+            for (player in Bukkit.getOnlinePlayers()) {
+                if (player.isOp) {
+                    player.hideBossBar(it)
+                }
+            }
+        }
 
-        return image
+        finalImage = applyBilateralFilter(finalImage)
+        bufferedImage = finalImage
+
+        return finalImage
     }
 
     private val maxReflectionTimes = 2
     private val raytraceDistance = 100.0
-
 
     fun getColorInWorld(rayTraceResult: RayTraceResult?, vector: Vector3f): Color {
         val currentTime = location.world.time
@@ -175,7 +194,8 @@ class RayTraceCamera(
         val wx: Float,
     )
 
-    fun applyBoxBlur(input: BufferedImage, passes: Int = 1): BufferedImage { var image = input
+    fun applyBoxBlur(input: BufferedImage, passes: Int = 1): BufferedImage {
+        var image = input
 
         repeat(passes) {
             val width = image.width
@@ -368,6 +388,12 @@ class RayTraceCamera(
             globalColorList.add(colorData)
             return true
         }
+
+        val threshold = 0.001f
+        if(reflectionTimes > maxReflectionTimes || parentRayTraceData.wx < threshold) {
+            return false
+        }
+
         if(rayTraceResult.hitBlock!!.type.isLight()){
             val light = rayTraceResult.hitBlock!!.type.getLight()
 //            val lightColor = getColorInWorldTexture(rayTraceResult)
@@ -383,11 +409,6 @@ class RayTraceCamera(
             return true
         }
 
-        val threshold = 0.001f
-        if (reflectionTimes > maxReflectionTimes || parentRayTraceData.wx < threshold) {
-            return false
-        }
- // 不是材质获取的问题
         val hitColor = getColorInWorldTexture(rayTraceResult)?.toOneRange()?.mul(parentRayTraceData.wc) ?: return false
         val hitMaterial = rayTraceResult.hitBlock!!.type.getReflectionMaterialData()
         val hitPos = rayTraceResult.hitPosition
@@ -399,30 +420,29 @@ class RayTraceCamera(
         val reflectionTimesWeight = (maxReflectionTimes.toFloat() - reflectionTimes.toFloat()) * REFLECTION_FACTOR
 
         val base = hitMaterial.reflectionTimes
-        val samples = when {
-            reflectionTimes > 2 -> max(1, base / 4)
-            reflectionTimes > 1 -> max(1, base / 2)
-            else -> base
-        }
+        val samples = base
+        // when {       //fixed: dynamic samples
+        //    reflectionTimes > 2 -> max(1, base / 4)
+        //    reflectionTimes > 1 -> max(1, base / 2)
+        //    else -> base
+        //}
         var misses = 0
 
         repeat(samples) {
             val perturbedVector = VectorUtil.perturbDirection(idealReflectionVector, hitMaterial.spread)
-            val dotProduct = perturbedVector.dot(idealReflectionVector)
-            val finalWeight = (hitMaterial.weight(dotProduct.toDouble()).toDouble() * reflectionTimesWeight).toFloat()
 
-            if (finalWeight < 0.001f) {
-                return@repeat
-            }
+            val angleWeight = hitMaterial.weight(perturbedVector.dot(idealReflectionVector).toDouble())
 
+            val finalWeight = angleWeight * reflectionTimesWeight
+            if(finalWeight <= 0.001) return@repeat // fixed: finalWeight == 0.001
             try {
-                val subRayTraceResult = world.rayTraceBlocks(
+                val rayTraceResult = world.rayTraceBlocks(
                     Location(world, hitPos.x, hitPos.y, hitPos.z),
                     perturbedVector.toVector(),
-                    raytraceDistance // break point 这里是报错点
+                    raytraceDistance
                 )
                 if (!rayTracing(
-                        subRayTraceResult,
+                        rayTraceResult,
                         reflectionTimes + 1,
                         RayTraceData(
                             wc = hitColor,
@@ -434,16 +454,16 @@ class RayTraceCamera(
                 ) {
                     misses += 1
                 }
-            }catch (e: Exception){
+            } catch (e: Exception) {
                 println(e)
             }
-//            vector3fPool.free(perturbedVector)
         }
 
+
 //        val missRate = misses.toFloat() / totals.toFloat()
-//        val darkColor = Color(22, 22, 22)
+////        val darkColor = Color(22, 22, 22)
 //        val darkColor = parentRayTraceData.wc.mul(0.2f)
-//            LightMaterial.colorBleaching(lightColor!!, light.brightness.toDouble())
+////            LightMaterial.colorBleaching(lightColor!!, light.brightness.toDouble())
 //        val colorData = ColorData(
 //            parentRayTraceData.wc.mul(darkColor),
 //            0.1f,
@@ -463,11 +483,10 @@ class RayTraceCamera(
 
         val image = TextureManager.getTexture(material, hitFace) ?: return null
 
-        val hitPos = rayTraceResult.hitPosition
-        val blockPos = hitBlock.location
-        val x = (hitPos.x - blockPos.x).toFloat()
-        val y = (hitPos.y - blockPos.y).toFloat()
-        val z = (hitPos.z - blockPos.z).toFloat()
+        val relativeHit = rayTraceResult.hitPosition.clone().subtract(hitBlock.location.toVector())
+        val x = relativeHit.x.toFloat()
+        val y = relativeHit.y.toFloat()
+        val z = relativeHit.z.toFloat()
 
         val (texX, texY) = TextureManager.getTextureCoords(
             hitFace, x, y, z, image.width, image.height
@@ -513,4 +532,3 @@ private fun Vector3i.toOneRange(): Vector3f {
 private fun Vector3f.toVector(): Vector {
     return Vector(this.x, this.y, this.z)
 }
-
