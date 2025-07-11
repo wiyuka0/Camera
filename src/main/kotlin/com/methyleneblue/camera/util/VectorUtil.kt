@@ -1,6 +1,7 @@
 package com.methyleneblue.camera.util
 
 import org.bukkit.block.BlockFace
+import org.joml.Vector3d
 import org.joml.Vector3f
 import kotlin.math.PI
 import kotlin.math.acos
@@ -15,20 +16,24 @@ object VectorUtil {
     fun getReflectedVector(
         incident: Vector3f,
         planeNormal: Vector3f,
-        output: Vector3f? = null,
-    ): Vector3f {val normal = Vector3f(planeNormal).normalize()
+        output: Vector3f,
+    ): Vector3f {
+        val normal = Vector3f().apply {
+            set(planeNormal)
+            normalize()
+        }
         if (normal.length().isNaN()) {
             throw IllegalArgumentException("Plane normal cannot be zero vector")
         }
 
         // 使用反射公式：R = I - 2*(I·N)*N
         val dot = incident.dot(normal)
-        val reflection = Vector3f(incident)
-        val temp = Vector3f(normal).mul(2 * dot)
+//        val reflection = Vector3f(incident)
+        val reflection = output.apply {
+            set(incident)
+        }
+        val temp = normal.mul(2 * dot)
         reflection.sub(temp)
-        output?.x = reflection.x
-        output?.y = reflection.y
-        output?.z = reflection.z
 
         return reflection
     }
@@ -88,13 +93,23 @@ object VectorUtil {
         }
     }
 
-    fun  perturbDirection(base: Vector3f, spread: Double, output: Vector3f? = null): Vector3f {
-        require(spread in 0.0..1.0)
+    fun perturbDirection(base: Vector3f, spread: Float, output: Vector3f): Vector3f {
+        require(spread in 0.0..1.0) // 不对啊，赋值了啊
 
-        if (spread == 0.0) return Vector3f(base).normalize()
-        if (spread == 1.0) {
+        if (spread == 0.0f) {
+            output.apply {
+                set(base)
+                normalize()
+            }
+            return output
+        }
+        if (spread == 1.0f) {
             // Uniform over the entire sphere
-            return randomUnitVector()
+            output.apply {
+                val randomVector = randomUnitVector()
+                set(randomVector)
+            }
+            return output
         }
 
         // Sample a direction within a cone around `base`
@@ -110,47 +125,58 @@ object VectorUtil {
         val y = (sin(phi) * sinTheta).toFloat()
         val z = cosTheta.toFloat()
 
-        val localDirection = Vector3f(x, y, z)
-
+//        val localDirection = Vector3f(x, y, z)
+        output.x = x
+        output.y = y
+        output.z = z
         // Step 2: Rotate local vector to align with `base`
-        return if(output == null) {
-            rotateVectorFromZAxis(localDirection, base)
-            /**
-             * [22:45:56 WARN]: Exception in thread "Thread-17" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3
-             * [22:45:56 WARN]: 	at Camera-1.0-SNAPSHOT.jar//com.methyleneblue.camera.command.TakePicture.onCommand$lambda$0(TakePicture.kt:25)
-             * [22:45:56 WARN]: 	at java.base/java.lang.Thread.run(Thread.java:1570)
-             */
-        } else {
-            val normalize = rotateVectorFromZAxis(localDirection, base).normalize()
-            output.x = normalize.x
-            output.y = normalize.y
-            output.z = normalize.z
-            output!!
-        }
+
+        val rotateVectorFromZAxis = rotateVectorFromZAxis(output, base)
+        output.set(rotateVectorFromZAxis)
+
+        return output
     }
 
     // Uniform random unit vector on the whole sphere
     fun randomUnitVector(): Vector3f {
         val theta = Random.Default.nextDouble(0.0, 2 * PI)
-        val z = Random.Default.nextDouble(-1.0, 1.0)
+        val z = Random.Default.nextFloat(-1f, 1f)
         val r = sqrt(1.0 - z * z)
-        return Vector3f(
-            (r * cos(theta)).toFloat(),
-            (r * sin(theta)).toFloat(),
-            z.toFloat()
-        )
+        return Vector3f().apply {
+            x = (r * cos(theta)).toFloat()
+            y = (r * sin(theta)).toFloat()
+            this.z = z.toFloat()
+        }
     }
 
-    // Rotates a vector from Z+ to targetDir
+    // Rotates a vector from Z+ to targetDir 哪个类 ReflectionMaterial
     fun rotateVectorFromZAxis(vec: Vector3f, targetDir: Vector3f): Vector3f {
-        val up = Vector3f(0f, 0f, 1f)
-        val axis = up.cross(Vector3f(targetDir), Vector3f())
-        val angle = acos(up.dot(Vector3f(targetDir).normalize()).coerceIn(-1f, 1f))
+//        val up = Vector3f(0f, 0f, 1f)
+        val up = Vector3f().set(0f, 0f, 1f)
 
-        if (axis.lengthSquared() < 1e-6f) return Vector3f(vec).rotateAxis(angle, 1f, 0f, 0f) // parallel or opposite
-        return Vector3f(vec).rotateAxis(angle, axis.x, axis.y, axis.z)
+        val targetDirClone = Vector3f().set(targetDir)
+        val targetDirCloneNormalize = Vector3f().set(targetDir).normalize()
+
+        val zeroVector = Vector3f()
+
+        val axis = up.cross(targetDirClone, zeroVector)
+        val angle = acos(up.dot(targetDirCloneNormalize).coerceIn(-1f, 1f))
+
+        if (axis.lengthSquared() < 1e-6f) return Vector3f().set(vec).rotateAxis(angle, 1f, 0f, 0f) // parallel or opposite
+        val result = Vector3f().set(vec).rotateAxis(angle, axis.x, axis.y, axis.z)
+
+        return result
     }
 
     // Helper
     fun lerp(a: Double, b: Double, t: Double): Double = a + (b - a) * t
+}
+
+fun Vector3d.get(i: Int): Double {
+    return when (i) {
+        0 -> x();
+        1 -> y();
+        2 -> z();
+        else -> throw IllegalArgumentException("Invalid axis: " + i);
+    };
 }

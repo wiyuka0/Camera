@@ -17,8 +17,9 @@ class CameraCommand: CommandExecutor {
         val width = p3[1].toInt()
         val height = p3[2].toInt()
         val fov = p3[3].toFloat()
+        val distance = p3[4].toDouble()
         var index = -1
-        if(p3.size >= 5) index = p3[4].toInt()
+        if(p3.size >= 6) index = p3[5].toInt()
 
         return when(type){
             "effect_based" -> {
@@ -26,7 +27,7 @@ class CameraCommand: CommandExecutor {
                     player.eyeLocation,
                     width to height,
                     fov.toDouble(),
-                    100.0,
+                    distance,
                     BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
                 )
 
@@ -44,7 +45,7 @@ class CameraCommand: CommandExecutor {
                     player.eyeLocation,
                     width to height,
                     fov.toDouble(),
-                    100.0,
+                    distance,
                     BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
                 )
 
@@ -58,7 +59,10 @@ class CameraCommand: CommandExecutor {
                 true
             }
 
-            else -> true
+            else -> {
+                player.sendMessage("Camera type is not exist.")
+                true
+            }
         }
     }
 }
