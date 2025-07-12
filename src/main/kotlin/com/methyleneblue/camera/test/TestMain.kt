@@ -1,5 +1,6 @@
 package com.methyleneblue.camera.test
 
+import com.methyleneblue.camera.imagepack.AfterEffect
 import com.methyleneblue.camera.raytracepack.bvh.BVHTree
 import com.methyleneblue.camera.raytracepack.bvh.HitResult
 import com.methyleneblue.camera.raytracepack.bvh.jocl.JoclInterface
@@ -15,14 +16,20 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
-import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.tan
 import kotlin.random.Random
 
 
 fun main() {
-    main1()
+    // main1()
+    aeTest()
+}
+
+fun aeTest() {
+    val input = ImageIO.read(File("C:\\image\\12input1.png"))
+    val output = AfterEffect.apply(input, 90.0)
+    ImageIO.write(output, "png", File("C:\\image\\output1.png"))
 }
 
 fun main1() {

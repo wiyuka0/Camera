@@ -1,5 +1,6 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
+import com.methyleneblue.camera.imagepack.util.ColorUtil
 import java.awt.image.BufferedImage
 import kotlin.math.PI
 import kotlin.math.abs
@@ -24,13 +25,6 @@ object SubpixelMorphologicalAA {
         return output
     }
 
-    private fun calculateLuma(rgb: Int): Float {
-        val r = rgb shr 16 and 0xFF
-        val g = rgb shr 8 and 0xFF
-        val b = rgb and 0xFF
-        return 0.2126f * r + 0.7152f * g + 0.0722f * b
-    }
-
     private fun edgeDetection(
         input: BufferedImage,
         output: BufferedImage,
@@ -42,7 +36,7 @@ object SubpixelMorphologicalAA {
         val luma = Array(height) { FloatArray(width) }
         for (y in 0 until height) {
             for (x in 0 until width) {
-                luma[y][x] = calculateLuma(input.getRGB(x, y))
+                luma[y][x] = ColorUtil.calculateLuma(input.getRGB(x, y))
             }
         }
 

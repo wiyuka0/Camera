@@ -19,6 +19,7 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.tan
 
@@ -143,7 +144,10 @@ abstract class BVHCamera(
 //    }
 
     /* Multi Thread*/
-    override fun updateCamera(player: Player?, mixinTimes: Int): BufferedImage {
+    override fun updateCamera(player: Player?, mixinTimes: Int, maxDepth: Float): Pair<BufferedImage, BufferedImage> {
+
+        val depthImage = BufferedImage(this.bufferedImage.width, this.bufferedImage.height, BufferedImage.TYPE_INT_RGB)
+
         val executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
 
         val bvhTree = getBVHTree(location, distance.toInt())
@@ -203,6 +207,16 @@ abstract class BVHCamera(
 
                         val result = bvhTree.rayTrace(location.toVector().toVector3f(), dir.toVector3f())
 
+                        val distance = result?.distance
+
+                        if (distance != null) {
+                            val logDepth = ln(distance + 1e-6) / ln(1.0 + 1e-6 + 1.0)
+                            val depthColor = logDepth.toInt().coerceAtLeast(0)
+
+                            val rgb = depthColor and 0xFFFFFFFF.toInt()
+                            depthImage.setRGB(i, j - startRow, rgb)
+                        }
+
                         var rSum = 0
                         var gSum = 0
                         var bSum = 0
@@ -250,6 +264,6 @@ abstract class BVHCamera(
         }
         bufferedImage = finalImage
 
-        return finalImage
+        return finalImage to depthImage
     }
 }

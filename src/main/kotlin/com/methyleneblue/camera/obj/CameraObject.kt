@@ -13,5 +13,5 @@ abstract class CameraObject(
     var bufferedImage: BufferedImage,
 ) {
 
-    abstract fun updateCamera(player: Player?, mixinTimes: Int = 1): BufferedImage
+    abstract fun updateCamera(player: Player?, mixinTimes: Int = 1, maxDepth: Float = 20.0f): Pair<BufferedImage, BufferedImage>
 }

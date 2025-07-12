@@ -14,7 +14,7 @@ object Bloom {
     fun applyEffect(
         image: BufferedImage,
         fov: Double,
-        bloomRadius: Float,
+        bloomRadius: Float = 50f,
         threshold: Float = 0.6f,
         softness: Float = 0.3f,
         intensity: Float = 1f

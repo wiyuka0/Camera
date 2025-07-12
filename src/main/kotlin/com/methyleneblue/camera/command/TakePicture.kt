@@ -1,6 +1,7 @@
 package com.methyleneblue.camera.command
 
 import com.methyleneblue.camera.CameraManager
+import com.methyleneblue.camera.imagepack.AfterEffect
 import com.methyleneblue.camera.imagepack.aftereffect.Bloom
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -34,8 +35,8 @@ class TakePicture: CommandExecutor {
                 val file = File(path)
                 val fileName = p3[2]
                 if (!file.exists()) file.mkdirs()
-                val output = Bloom.applyEffect(cameraInstance.bufferedImage, 90.0, 50f)
-
+//                val output = Bloom.applyEffect(cameraInstance.bufferedImage, 90.0, 50f)
+                val output = AfterEffect.apply(cameraInstance.bufferedImage, 90.0)
                 ImageIO.write(output, "png", File(file, "${fileName}.png"))
             } catch (e : Exception) {
                 e.printStackTrace()
