@@ -39,12 +39,14 @@ class RayTraceCamera(
     fov: Double, // 基于横向计算
     distance: Double,
     bufferedImage: BufferedImage,
+    depthImage: BufferedImage
 ): BVHCamera(
     location = location,
     size,
     fov,
     distance,
     bufferedImage,
+    depthImage
 ) {
     companion object {
         private const val REFLECTION_FACTOR = 1.0

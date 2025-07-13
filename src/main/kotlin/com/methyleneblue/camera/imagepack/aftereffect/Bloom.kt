@@ -1,16 +1,13 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
 import com.methyleneblue.camera.imagepack.blur.DualBlur
+import com.methyleneblue.camera.imagepack.util.AdaptabilityUtil
+import com.methyleneblue.camera.imagepack.util.ColorUtil.calcBrightness
 import java.awt.image.BufferedImage
 import kotlin.math.*
 
 
 object Bloom {
-    const val K = 0.547373141f
-    const val REFERENCE_FOV = 90.0
-    const val REFERENCE_WIDTH = 1920
-    val TAN_REFERENCE_FOV = tan(Math.toRadians(REFERENCE_FOV / 2))
-
     fun applyEffect(
         image: BufferedImage,
         fov: Double,
@@ -20,22 +17,9 @@ object Bloom {
         intensity: Float = 1f
     ): BufferedImage {
         val bloomOnly = extractBrightParts(image, threshold, softness)
-        val radius = calculateRadius(image.width, fov, bloomRadius)
+        val radius = AdaptabilityUtil.calculateRadius(image.width, fov, bloomRadius).roundToInt().coerceAtLeast(1)
         val bloomed = DualBlur.blur(bloomOnly, radius)
         return blendBloomEffect(image, bloomed, intensity)
-    }
-
-    /* 参考值 */
-    private fun calculateRadius(
-        width: Int,
-        fov: Double,
-        baseRadius: Float
-    ): Int {
-        val fovRatio = TAN_REFERENCE_FOV / tan(Math.toRadians(fov / 2))
-        val resRatio = width.toDouble() / REFERENCE_WIDTH
-
-        val radius = (baseRadius * fovRatio * resRatio).roundToInt()
-        return radius.coerceAtLeast(1)
     }
 
     private fun extractBrightParts(
@@ -115,19 +99,6 @@ object Bloom {
             }
         }
         return result
-    }
-
-    fun calcBrightness(
-        a: Int,
-        r: Int,
-        g: Int,
-        b: Int
-    ): Float {
-        val rx = (1f * r / 255f).pow(2.2f)
-        val gx = (1.5f * g / 255f).pow(2.2f)
-        val bx = (0.6f * b / 255f).pow(2.2f)
-        val x = rx + gx + bx
-        return a / 255 * x.pow(1f / 2.2f) * K
     }
 
     private fun smooth(start: Float, end: Float, x: Float): Float {

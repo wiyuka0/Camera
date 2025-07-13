@@ -22,13 +22,15 @@ class EffectBasedCamera(
     size: Pair<Int, Int>,
     fov: Double, // 基于横向计算
     distance: Double,
-    bufferedImage: BufferedImage
+    bufferedImage: BufferedImage,
+    depthImage: BufferedImage
     ): BVHCamera(
     location = location,
     size,
     fov,
     distance,
-    bufferedImage
+    bufferedImage,
+    depthImage,
 ) {
 
     private val textureCache = ConcurrentHashMap<String, BufferedImage>()

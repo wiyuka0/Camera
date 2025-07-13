@@ -4,9 +4,6 @@ import com.methyleneblue.camera.raytracepack.bvh.BVHTree
 import com.methyleneblue.camera.raytracepack.bvh.BVHTree.Companion.getBVHTree
 import com.methyleneblue.camera.raytracepack.bvh.FlatBVHNode
 import com.methyleneblue.camera.raytracepack.bvh.HitResult
-import com.methyleneblue.camera.raytracepack.bvh.jocl.JoclInterface
-import com.methyleneblue.camera.raytracepack.bvh.jocl.async.AsyncFuture
-import com.methyleneblue.camera.texture.TextureManager
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
@@ -20,7 +17,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.ln
-import kotlin.math.max
 import kotlin.math.tan
 
 abstract class BVHCamera(
@@ -28,13 +24,15 @@ abstract class BVHCamera(
     size: Pair<Int, Int>,
     fov: Double,
     distance: Double,
-    bufferedImage: BufferedImage
+    bufferedImage: BufferedImage,
+    depthImage: BufferedImage
     ): CameraObject(
     location = location,
     size,
     fov,
     distance,
     bufferedImage,
+    depthImage,
 ) {
 
     abstract fun getColorInWorld(rayTraceResult: HitResult?, startDir: Vector3f, flatBVHNode: Array<FlatBVHNode>, bvhTree: BVHTree): Color
@@ -263,6 +261,7 @@ abstract class BVHCamera(
             }
         }
         bufferedImage = finalImage
+        this.depthImage = depthImage
 
         return finalImage to depthImage
     }

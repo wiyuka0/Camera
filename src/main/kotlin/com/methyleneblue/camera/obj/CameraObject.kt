@@ -11,6 +11,7 @@ abstract class CameraObject(
     val fov: Double,
     val distance: Double,
     var bufferedImage: BufferedImage,
+    var depthImage: BufferedImage,
 ) {
 
     abstract fun updateCamera(player: Player?, mixinTimes: Int = 1, maxDepth: Float = 20.0f): Pair<BufferedImage, BufferedImage>

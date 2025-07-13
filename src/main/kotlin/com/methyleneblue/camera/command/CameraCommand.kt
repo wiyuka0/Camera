@@ -28,7 +28,8 @@ class CameraCommand: CommandExecutor {
                     width to height,
                     fov.toDouble(),
                     distance,
-                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
                 )
 
                 var cameraId = -1;
@@ -46,7 +47,8 @@ class CameraCommand: CommandExecutor {
                     width to height,
                     fov.toDouble(),
                     distance,
-                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
                 )
 
                 var cameraId = -1

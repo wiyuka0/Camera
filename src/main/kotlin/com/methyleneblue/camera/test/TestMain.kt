@@ -27,9 +27,9 @@ fun main() {
 }
 
 fun aeTest() {
-    val input = ImageIO.read(File("C:\\image\\12input1.png"))
-    val output = AfterEffect.apply(input, 90.0)
-    ImageIO.write(output, "png", File("C:\\image\\output1.png"))
+    // val input = ImageIO.read(File("C:\\image\\12input1.png"))
+    // val output = AfterEffect.apply(input, 90.0)
+    // ImageIO.write(output, "png", File("C:\\image\\output1.png"))
 }
 
 fun main1() {
