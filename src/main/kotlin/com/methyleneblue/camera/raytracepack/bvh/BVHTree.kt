@@ -11,9 +11,10 @@ class BVHTree {
     private val blocks = mutableListOf<Block>()
     var root: BVHNode? = null
 
-    fun addBlock(location: Vector3i, scale: Vector3f = Vector3f(1f, 1f, 1f), material: Material) {
+    fun addBlock(location: Vector3i, scale: Vector3f = Vector3f(1f, 1f, 1f), material: Material, bukkitBlock: org.bukkit.block.Block?) {
+        if(bukkitBlock?.type == Material.AIR || bukkitBlock?.type == Material.VOID_AIR) return
         val pos = Vector3f(location.x.toFloat(), location.y.toFloat(), location.z.toFloat())
-        blocks.add(Block(pos, scale, material.getNewId()))
+        blocks.add(Block(pos, bukkitBlock, scale, material.getNewId()))
     }
 
     fun buildTree() {
@@ -60,10 +61,11 @@ class BVHTree {
 
                 // 添加非空气方块
                 if (current.type != Material.AIR) {
-                    bvhTree.addBlock( // run test main  //我看不到
+                    bvhTree.addBlock(
                         location = Vector3i(curLoc.x.toInt(), curLoc.y.toInt(), curLoc.z.toInt()),
                         material = current.type,
-                        scale = Vector3f(1f, 1f, 1f)
+                        scale = Vector3f(1f, 1f, 1f),
+                        bukkitBlock = current
                     )
                 }
 

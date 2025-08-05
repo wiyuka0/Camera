@@ -1,16 +1,16 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
 import com.methyleneblue.camera.imagepack.util.ColorUtil
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.atan2
 
 import kotlin.math.hypot
 
 object SubpixelMorphologicalAA {
     fun applyEffect(
-        image: BufferedImage
+        image: BufferedImage,
+        progressBar: BossBar? = null
     ): BufferedImage {
         val width = image.width
         val height = image.height
@@ -18,9 +18,9 @@ object SubpixelMorphologicalAA {
         val output = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
         val output1 = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
 
-        edgeDetection(image, output)
-        blendingWeight(output, output1)
-        neighborhoodBlending(image, output1, output)
+        edgeDetection(image, output, progressBar)
+        blendingWeight(output, output1, progressBar)
+        neighborhoodBlending(image, output1, output, progressBar)
 
         return output
     }
@@ -28,8 +28,12 @@ object SubpixelMorphologicalAA {
     private fun edgeDetection(
         input: BufferedImage,
         output: BufferedImage,
+        progressBar: BossBar? = null,
         edgeThreshold: Float = 20f
     ) {
+        progressBar?.setTitle("后处理 - SMAA - 边缘检测")
+        progressBar?.progress = 0.0
+
         val width = input.width
         val height = input.height
 
@@ -46,8 +50,14 @@ object SubpixelMorphologicalAA {
             return luma[y][x]
         }
 
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val current = luma[y][x]
 
                 val gx =
@@ -75,13 +85,23 @@ object SubpixelMorphologicalAA {
 
     private fun blendingWeight(
         input: BufferedImage,
-        output: BufferedImage
+        output: BufferedImage,
+        progressBar: BossBar? = null
     ) {
+        progressBar?.setTitle("后处理 - SMAA - 混合权重计算")
+        progressBar?.progress = 0.0
+
         val width = input.width
         val height = input.height
 
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val edgeColor = input.getRGB(x, y)
                 if (edgeColor and 0x00FFFFFF == 0) {
                     output.setRGB(x, y, 0)
@@ -156,13 +176,23 @@ object SubpixelMorphologicalAA {
     private fun neighborhoodBlending(
         image: BufferedImage,
         input: BufferedImage,
-        output: BufferedImage
+        output: BufferedImage,
+        progressBar: BossBar? = null
     ) {
+        progressBar?.setTitle("后处理 - SMAA - 邻域混合")
+        progressBar?.progress = 0.0
+
         val width = input.width
         val height = input.height
 
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val blend = input.getRGB(x, y)
 
                 val current = image.getRGB(x, y)

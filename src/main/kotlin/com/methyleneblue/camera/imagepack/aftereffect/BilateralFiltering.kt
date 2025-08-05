@@ -1,6 +1,8 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
+import java.util.concurrent.atomic.AtomicInteger
 
 import kotlin.math.sqrt
 import kotlin.math.exp
@@ -9,10 +11,14 @@ import kotlin.math.pow
 object BilateralFiltering {
     fun applyEffect(
         image: BufferedImage,
+        progressBar: BossBar? = null,
         radius: Int = 3,
         sigmaSpace: Double = 3.0,
         sigmaColor: Double = 0.1
     ): BufferedImage {
+        progressBar?.setTitle("后处理 - 双边滤波")
+        progressBar?.progress = 0.0
+
         val width = image.width
         val height = image.height
 
@@ -25,8 +31,14 @@ object BilateralFiltering {
             }
         }
 
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val centerPixel = image.getRGB(x, y)
                 val centerR = centerPixel shr 16 and 0xFF
                 val centerG = centerPixel shr 8 and 0xFF

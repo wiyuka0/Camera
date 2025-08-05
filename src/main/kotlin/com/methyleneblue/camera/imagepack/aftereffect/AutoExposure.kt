@@ -1,6 +1,7 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
 import com.methyleneblue.camera.imagepack.util.ColorUtil
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
 import kotlin.math.exp
 import kotlin.math.max
@@ -9,10 +10,14 @@ import kotlin.math.sqrt
 object AutoExposure {
     fun applyEffect(
         image: BufferedImage,
+        progressBar: BossBar? = null,
         intensity: Float = 0.4f,
         exposureOffset: Float = 1f,
         samplingMode: Int = 2 // 0: 中心采光 1: 平均采光 2: 中心权重
     ): BufferedImage {
+        progressBar?.setTitle("后处理 - 自动曝光 - 测光")
+        progressBar?.progress = 1.0
+
         val avgLuma = when (samplingMode) {
             0 -> calcCenterLuma(image)
             1 -> calcAvgLuma(image)
@@ -26,8 +31,17 @@ object AutoExposure {
 
         val exposureFactor = calcExposureFactor(avgLuma, exposureOffset, intensity)
 
+        progressBar?.setTitle("后处理 - 自动曝光 - 曝光")
+        progressBar?.progress = 0.0
+
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val color = image.getRGB(x, y)
                 var r = color shr 16 and 0xFF
                 var g = color shr 8 and 0xFF

@@ -1,5 +1,6 @@
 package com.methyleneblue.camera.imagepack.aftereffect
 
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
 import kotlin.math.sqrt
 
@@ -11,8 +12,12 @@ object Vignette {
 
     fun applyEffect(
         image: BufferedImage,
+        progressBar: BossBar? = null,
         intensity: Float = 0.3f
     ): BufferedImage {
+        progressBar?.setTitle("后处理 - 光晕")
+        progressBar?.progress = 0.0
+
         val width = image.width
         val height = image.height
         val output = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
@@ -24,8 +29,14 @@ object Vignette {
 
         val maxF = f(maxDistance)
 
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val distanceX = x - centerX
                 val distanceY = y - centerY
                 val distance = sqrt(distanceX * distanceX + distanceY * distanceY)

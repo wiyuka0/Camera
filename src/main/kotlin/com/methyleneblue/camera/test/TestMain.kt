@@ -22,14 +22,15 @@ import kotlin.random.Random
 
 
 fun main() {
-    // main1()
-    aeTest()
+     main1()
+    // aeTest()
 }
 
 fun aeTest() {
-    // val input = ImageIO.read(File("C:\\image\\12input1.png"))
-    // val output = AfterEffect.apply(input, 90.0)
-    // ImageIO.write(output, "png", File("C:\\image\\output1.png"))
+//    val input = ImageIO.read(File("C:\\image\\37B2C93C8231EDD1A8DFE41F03DB4D8B.jpg"))
+//    val output = AfterEffect.apply(input, 90.0)
+//    ImageIO.write(output, "png", File("C:\\image\\output1.png"))
+    main1()
 }
 
 fun main1() {
@@ -104,7 +105,7 @@ fun main1() {
         Vector3i(3, 0, -9),
     ) // 方块坐标
     for (block in fixedBlocks) {
-        bvhTree.addBlock(block, material = Material.DIRT)
+        bvhTree.addBlock(block, material = Material.DIRT, bukkitBlock = null)
     }
 
     // 添加随机方块
@@ -164,40 +165,6 @@ fun main1() {
 
     JoclInterface.processResults(flatBVHNode, bvhTree)
 
-    for ((index, triple) in futures.withIndex()) {
-        val (start, dir, future) = triple
-        val result = future.get()
-        val hitPoint = result!!.distance.let { Vector3f(start).add(Vector3f(dir).mul(it)) }
-
-        if(result == null || hitPoint == null){
-            println("Ray #$index")
-            println("  Start        : ${formatVec(start)}")
-            println("  Direction    : ${formatVec(dir)}")
-            println("  Hit point    : Non-Hit")
-            println("  t (distance) : -1")
-            println("  Real distance: Non-Hit")
-            println("  Voxel hit    : Non-Hit")
-            println()
-            continue
-        }
-        val realDistance = start.distance(hitPoint)
-
-        val voxelHit = Vector3i(
-            floor(hitPoint.x).toInt(),
-            floor(hitPoint.y).toInt(),
-            floor(hitPoint.z).toInt()
-        )
-
-        println("Ray #$index")
-        println("  Start        : ${formatVec(start)}")
-        println("  Direction    : ${formatVec(dir)}")
-        println("  Hit point    : ${formatVec(hitPoint)}")
-        println("  t (distance) : ${formatFloat(result.distance)}")
-        println("  Real distance: ${formatFloat(realDistance)}")
-        println("  Voxel hit    : ${formatVecInt(voxelHit)}")
-        println()
-    }
-
     val fov = 140.0
     val width = 1920
     val height = 1920
@@ -220,7 +187,7 @@ fun main1() {
     val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
     var count = 0
 
-    data class Pack(val i: Int, val j: Int, val result: AsyncFuture<HitResult?>)
+    data class Pack(val i: Int, val j: Int, val result: AsyncFuture<Vector3f>)
 
     val future1: MutableList<Pack> = mutableListOf()
 
@@ -236,17 +203,17 @@ fun main1() {
                 .normalize()
 
 //            val hit = bvhTree.rayTrace(location.toVector().toVector3f(), dir.toVector3f())
-            val hitFuture = JoclInterface.traceRay(location.toVector().toVector3f(), dir.toVector3f())
+            val hitFuture = JoclInterface.postWorldColorRequest(location.toVector().toVector3f(), dir.toVector3f())
             future1.add(Pack(i, j, hitFuture))
 
-            if(count > 50000) {
-                JoclInterface.processResults(flatBVHNode, bvhTree)
+            if(count > 1) {
+                JoclInterface.processColors(bvhTree, flatBVHNode)
                 count = 0
             }
         }
     }
 
-    JoclInterface.processResults(flatBVHNode, bvhTree)
+    JoclInterface.processColors(bvhTree, flatBVHNode)
     fun blendColors(colorA: Color, colorB: Color, ratio: Float): Color {
         val clampedRatio = ratio.coerceIn(0f, 1f)
 
@@ -266,79 +233,8 @@ fun main1() {
             println()
         }
         index++
-        val color = if(hit!!.startPos == null) Color.WHITE else {
-
-            var finalColor: Color? = null
-            val hitPos = hit.hitPosition
-            val hitFace = hit.face
-
-            if (hitPos == null || hitFace == null || hitPos.x.isNaN()) {
-                finalColor = Color.WHITE
-            } else {
-
-                finalColor = TextureManager.getWorldColorTexture(defaultMaterial, hitPos, hitFace)
-            }
-//
-////            } else
-//                if (hitPos.x.isNaN()) {
-//                    finalColor = Color.WHITE
-//                } else {
-////
-////            finalColor
-//
-////                    if (hit.hitPosition.x < 1) {
-////                        finalColor = Color.RED
-////                    } else {
-//                        val k = 10f
-//                        val fr = Math.clamp(abs(hit.hitPosition.x / k * 255).toLong(), 0, 255)
-//                        val fg = Math.clamp(abs(hit.hitPosition.y / k * 255).toLong(), 0, 255)
-//                        val fb = Math.clamp(abs(hit.hitPosition.z / k * 255).toLong(), 0, 255)
-////                println("$fr, $fg, $fb")
-//                        finalColor = Color(fr, fr, fr)
-////                    }
-//                }
-//            }
-//            if(finalColor.red == 255){
-////                println()
-//            }
-//            if(finalColor.red == 0){
-////                println()
-//            }
-            finalColor
-        }
-/*
-//            val hitPos = Vector3f(hit.startPos).add(hit.direction!!.mul(hit.distance))
-//                val realDistance = hitPos.distance(hit.startPos)
-
-//            val realDistance = hit.distance
-//            val realDistance = location.toVector().toVector3f().distance(Vector3f(hit.hitPosition).normalize())
-//            val distanceK = realDistance / 30.5
-//            val distanceColor = Color(
-//                255, 255, 255
-//            )
-//            if(distanceK.isNaN()) {
-//                println(hit.hitPosition)
-//                println(hit.distance)
-//            }
-//            var newColor: Color? = null
-//            if(hit.face == org.bukkit.block.BlockFace.UP) {
-//                newColor = Color(0, 0, distanceColor.blue)
-//            } else if(hit.face == org.bukkit.block.BlockFace.EAST) {
-////                println(distanceK)
-//                newColor = Color(0, distanceColor.green, 0)
-//            } else if(hit.face == org.bukkit.block.BlockFace.NORTH) {
-//                newColor = Color(distanceColor.red, 0, 0)
-//            } else if(hit.face == org.bukkit.block.BlockFace.SOUTH) {
-//                newColor = Color(0, distanceColor.green, distanceColor.blue)
-//            } else if (hit.face == org.bukkit.block.BlockFace.WEST) {
-//                newColor = Color(distanceColor.red, 0, distanceColor.blue)
-//            } else if (hit.face == org.bukkit.block.BlockFace.DOWN) {
-//                newColor = Color(distanceColor.red, distanceColor.green, 0)
-//            } else newColor = Color.WHITE
-////            newColor
-//            blendColors(newColor, Color.WHITE, distanceK.toFloat())
-//        }*/
-        image.setRGB(i, j, color!!.rgb)
+        val color = Color(hit.x, hit.y, hit.z)
+        image.setRGB(i, j, color.rgb)
     }
     ImageIO.write(image, "png", File("test.png"))
 }
@@ -433,11 +329,11 @@ fun oldMain() {
     repeat(10) {
         val rL = randomLocation(Vector3i(-10, -10, -10), Vector3i(10, 10, 10))
         val rV = Vector3i(rL.x.toInt(), rL.y.toInt(), rL.z.toInt())
-        bvhTree.addBlock(//原来是测试用例的问题吗）
-            location = rV,
-            material = randomMaterial(),
-            scale = Vector3f(1f, 1f, 1f)
-        )
+//        bvhTree.addBlock(//原来是测试用例的问题吗）
+//            location = rV,
+//            material = randomMaterial(),
+//            scale = Vector3f(1f, 1f, 1f)
+//        )
     }
     bvhTree.buildTree()
 

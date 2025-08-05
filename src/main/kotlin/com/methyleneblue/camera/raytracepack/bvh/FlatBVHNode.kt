@@ -9,5 +9,7 @@ data class FlatBVHNode(
     val rightIndex: Int,
     val isLeaf: Int,
     val blockPosition: Vector3f,
-//    val blockMaterialIndex: Int,
+    val textureOffset: Int,
+    val materialIndex: Int,
+    val params: Vector3f,
 )

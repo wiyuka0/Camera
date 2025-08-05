@@ -2,9 +2,11 @@ name: Camera
 version: '1.0-SNAPSHOT'
 main: com.methyleneblue.camera.Camera
 api-version: '1.21'
-authors: [ volatila, Fadeorite ]
+authors: [ Fadeorite, MethyleneBlue_ ]
 
 commands:
   takepicture:
 
   cameracommand:
+
+  recompilekernel:

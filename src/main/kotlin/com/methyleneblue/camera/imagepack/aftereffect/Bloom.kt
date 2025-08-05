@@ -3,35 +3,51 @@ package com.methyleneblue.camera.imagepack.aftereffect
 import com.methyleneblue.camera.imagepack.blur.DualBlur
 import com.methyleneblue.camera.imagepack.util.AdaptabilityUtil
 import com.methyleneblue.camera.imagepack.util.ColorUtil.calcBrightness
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
 import kotlin.math.*
-
 
 object Bloom {
     fun applyEffect(
         image: BufferedImage,
         fov: Double,
+        progressBar: BossBar? = null,
         bloomRadius: Float = 50f,
         threshold: Float = 0.6f,
         softness: Float = 0.3f,
         intensity: Float = 1f
     ): BufferedImage {
-        val bloomOnly = extractBrightParts(image, threshold, softness)
+        val bloomOnly = extractBrightParts(image, threshold, softness, progressBar)
         val radius = AdaptabilityUtil.calculateRadius(image.width, fov, bloomRadius).roundToInt().coerceAtLeast(1)
+        progressBar?.setTitle("后处理 - 泛光 - 模糊亮部")
+        progressBar?.progress = 1.0
         val bloomed = DualBlur.blur(bloomOnly, radius)
-        return blendBloomEffect(image, bloomed, intensity)
+        return blendBloomEffect(image, bloomed, intensity, progressBar)
     }
 
     private fun extractBrightParts(
         source: BufferedImage,
         threshold: Float,
-        softness: Float
+        softness: Float,
+        progressBar: BossBar? = null
     ): BufferedImage {
-        val result = BufferedImage(source.width, source.height, BufferedImage.TYPE_INT_ARGB)
+        progressBar?.setTitle("后处理 - 泛光 - 提取亮部")
+        progressBar?.progress = 0.0
+
+        val width = source.width
+        val height = source.height
+
+        val result = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
         val softThreshold = threshold + softness
 
-        for (y in 0 until source.height) {
-            for (x in 0 until source.width) {
+        var currentCount = 0
+        val totalCount = width * height
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val pixel = source.getRGB(x, y)
                 val a = pixel shr 24 and 0xff
                 val r = pixel shr 16 and 0xFF
@@ -59,12 +75,25 @@ object Bloom {
     private fun blendBloomEffect(
         original: BufferedImage,
         bloom: BufferedImage,
-        intensity: Float
+        intensity: Float,
+        progressBar: BossBar? = null
     ): BufferedImage {
-        val result = BufferedImage(original.width, original.height, BufferedImage.TYPE_INT_ARGB)
+        progressBar?.setTitle("后处理 - 泛光 - 混合")
+        progressBar?.progress = 1.0
 
-        for (y in 0 until original.height) {
-            for (x in 0 until original.width) {
+        val width = original.width
+        val height = original.height
+
+        val result = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+
+        var currentCount = 0
+        val totalCount = width * height
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
                 val originalPixel = original.getRGB(x, y)
                 val bloomPixel = bloom.getRGB(x, y)
 

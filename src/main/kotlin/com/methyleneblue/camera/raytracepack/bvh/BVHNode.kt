@@ -1,7 +1,9 @@
 package com.methyleneblue.camera.raytracepack.bvh
 
+import com.methyleneblue.camera.obj.raytrace.RayTraceMaterial
+import com.methyleneblue.camera.texture.TextureManager
+import org.bukkit.Material
 import org.bukkit.block.BlockFace
-import org.bukkit.util.BoundingBox
 import org.bukkit.util.Vector
 import org.joml.Vector3f
 import kotlin.math.*
@@ -122,17 +124,33 @@ class BVHNode(blocks: List<Block>) {
         }
     }
 
+
+    val defaultMaterial = Material.STONE
+
     fun flatten(): List<FlatBVHNode> {
         val list = mutableListOf<FlatBVHNode>()
         fun dfs(node: BVHNode?): Int {
             if (node == null) return -1
             val index = list.size
+
+            val bukkitBlock = node.block?.bukkitBlock
+
+//            val materialIndex = RayTraceMaterial.getMaterialReflectionId(bukkitBlock?.type ?: Material.STONE)
+            val materialInstance = RayTraceMaterial.getMaterialReflectionData(bukkitBlock?.type ?: defaultMaterial)
+            val materialIndex = materialInstance.materialId
+            val argsLength = materialInstance.elseArgs.size
             list.add(FlatBVHNode(
                 node.bounds.min,
                 node.bounds.max,
                 -1, -1, // placeholder
                 if (node.block != null) 1 else 0,
-                node.block?.position ?: Vector3f(0f)
+                node.block?.position ?: Vector3f(0f),
+                textureOffset = if(bukkitBlock == null) 0 else TextureManager.getMaterialOffset(bukkitBlock.type),
+                materialIndex = materialIndex,
+                params = Vector3f(
+                    if(argsLength >= 1) materialInstance.elseArgs[0].toFloat() else 0.0f,
+                    if(argsLength >= 2) materialInstance.elseArgs[1].toFloat() else 0.0f,
+                    if(argsLength >= 3) materialInstance.elseArgs[2].toFloat() else 0.0f),
             ))
             val leftIndex = dfs(node.left)
             val rightIndex = dfs(node.right)

@@ -3,6 +3,7 @@ package com.methyleneblue.camera.command
 import com.methyleneblue.camera.CameraManager
 import com.methyleneblue.camera.obj.EffectBasedCamera
 import com.methyleneblue.camera.obj.RayTraceCamera
+import com.methyleneblue.camera.obj.SingleRayTraceCamera
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -28,8 +29,9 @@ class CameraCommand: CommandExecutor {
                     width to height,
                     fov.toDouble(),
                     distance,
+                    null,
                     BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
-                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
                 )
 
                 var cameraId = -1;
@@ -47,8 +49,29 @@ class CameraCommand: CommandExecutor {
                     width to height,
                     fov.toDouble(),
                     distance,
+                    null,
                     BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
+                )
+
+                var cameraId = -1
+                cameraId = if(index != -1) {
+                    CameraManager.addCameraByIndex(cameraInstance, index)
+                }else {
+                    CameraManager.addCamera(cameraInstance)
+                }
+                player.sendMessage("Generated Camera Id $cameraId")
+                true
+            }
+            "sraytrace" -> {
+                val cameraInstance = SingleRayTraceCamera(
+                    player.eyeLocation,
+                    width to height,
+                    fov.toDouble(),
+                    distance,
+                    null,
                     BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
                 )
 
                 var cameraId = -1

@@ -1,30 +1,37 @@
 package com.methyleneblue.camera.raytracepack.bvh.jocl
 
+import com.methyleneblue.camera.obj.raytrace.RayTraceMaterial
+import com.methyleneblue.camera.raytracepack.bvh.BVHNode
 import com.methyleneblue.camera.raytracepack.bvh.BVHTree
 import org.bukkit.block.BlockFace
 import com.methyleneblue.camera.raytracepack.bvh.FlatBVHNode
 import com.methyleneblue.camera.raytracepack.bvh.HitResult
 import com.methyleneblue.camera.raytracepack.bvh.jocl.async.AsyncFuture
+import com.methyleneblue.camera.texture.TextureManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.bukkit.Material
 import org.jocl.*
 import org.jocl.CL.*
 import org.joml.Vector3f
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.random.Random
 
 object JoclInterface {
     lateinit var context: cl_context
-//    lateinit var commandQueue: cl_command_queue
     lateinit var device: cl_device_id
     lateinit var program: cl_program
     lateinit var rayTraceKernel: cl_kernel
 
-    lateinit var commandQueueThreadPool: ThreadLocal<cl_command_queue>
+    lateinit var commandQueue: cl_command_queue
 
     var isCalculating = false
     var lastStatusUpdate = -1L
@@ -99,7 +106,12 @@ object JoclInterface {
         val rayDirection: Vector3f,
         val asyncFuture: AsyncFuture<HitResult?>
     )
-
+    data class ColorTraceRequest(
+        val cameraOrigin: Vector3f,
+        val direction: Vector3f,
+        val asyncFuture: AsyncFuture<Vector3f>
+    )
+    val requestColor = ConcurrentLinkedQueue<ColorTraceRequest>()
     val requests = ConcurrentLinkedQueue<TraceRayRequest>()
 
     fun traceRay(
@@ -152,8 +164,6 @@ object JoclInterface {
         for ((index, origin) in rayOrigins.withIndex()) {
             val direction = rayDirections[index]
             val hitResult = bvhTree.rayTrace(origin, direction)
-            // 为什么不能放null
-            // result[index] = (hitResult ?: HitResult(Vector3f(Float.NaN, Float.NaN, Float.NaN), -1f, BlockFace.SELF, origin, direction)) as HitResult?
             result[index] = hitResult
         }
 
@@ -204,7 +214,7 @@ object JoclInterface {
         val rayOriginBuffer = createReadOnlyFloatBuffer(rayOriginFloats)
         val rayDirBuffer = createReadOnlyFloatBuffer(rayDirFloats)
 
-        val commandQueue = commandQueueThreadPool.get()
+        val commandQueue = commandQueue
 
 // 输出缓冲区
         val rayCount = rayOrigins.size
@@ -323,60 +333,289 @@ object JoclInterface {
         }
     }
 
-/*
-//    fun traceRays(rays: Array<Vector3f>, root: BVHNode) {
-//        val flattenRoot = root.flatten()
-//
-//        val size = flattenRoot.size * 44
-//        val nodesBuffer = ByteBuffer.allocate(size)
-//        nodesBuffer.order(ByteOrder.nativeOrder())
-//        for (node in flattenRoot) {
-//            nodesBuffer.putFloat(node.min.x).putFloat(node.min.y).putFloat(node.min.z)
-//                       .putFloat(node.max.x).putFloat(node.max.y).putFloat(node.max.z)
-//                       .putInt(node.leftIndex).putInt(node.rightIndex)
-//                       .putFloat(node.blockPosition.x).putFloat(node.blockPosition.y).putFloat(node.blockPosition.z)
-//        }
-//        nodesBuffer.rewind()
-//        val resultUnitSize = 12 + 12 + 12 + 4 // startPos:Vector3f + direction:Vector3f + endPos:Vector3f + distance:Float
-//
-//        val raysMem = createRayBuffer(rays)
-//        val resultsMem = clCreateBuffer(context, CL.CL_MEM_WRITE_ONLY, rays.size * 8L, null, null)
-//        val bvhMem = clCreateBuffer(context, CL.CL_MEM_READ_ONLY or CL.CL_MEM_COPY_HOST_PTR, size.toLong(), Pointer.to(nodesBuffer), null)
-//
-//        val kernel = loadProgramFromFile("${kernelPath}\\traceRays.cl", "traceRays")
-//        clSetKernelArg(kernel, 0, Sizeof.cl_mem.toLong(), Pointer.to(raysMem))
-//        clSetKernelArg(kernel, 1, Sizeof.cl_mem.toLong(), Pointer.to(bvhMem))
-//        clSetKernelArg(kernel, 2, Sizeof.cl_mem.toLong(), Pointer.to(resultsMem))
-//        clSetKernelArg(kernel, 3, Sizeof.cl_int.toLong(), Pointer.to(intArrayOf(flattenRoot.size)))
-//        clSetKernelArg(kernel, 4, Sizeof.cl_int.toLong(), Pointer.to(intArrayOf(rays.size)))
-//
-//        val globalWorkSize = longArrayOf(rays.size.toLong())
-//        clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, null, 0, null, null)
-//
-//        val raysSize = rays.size * 8
-//
-//        val results = ByteBuffer.allocateDirect(raysSize)
-//        results.order(ByteOrder.nativeOrder())
-//
-//        clEnqueueReadBuffer(commandQueue, resultsMem, true, 0, raysSize.toLong(), Pointer.to(results), 0, null, null)
-//
-//        for (i in 0 until rays.size) {
-//            // val
-//        }
-//
-//        CL.clReleaseMemObject(raysMem)
-//        CL.clReleaseMemObject(resultsMem)
-//        CL.clReleaseMemObject(bvhMem)
-//        CL.clReleaseKernel(kernel)
-//        CL.clReleaseProgram(program)
-//        CL.clReleaseCommandQueue(commandQueue)
-//        CL.clReleaseContext(context)
-//    }
+    fun processColors(bvhTree: BVHTree, flatBVHNode: Array<FlatBVHNode>) {
+        getWorldColors(bvhTree, flatBVHNode)
+    }
+    fun postWorldColorRequest(cameraOrigin: Vector3f, direction: Vector3f): AsyncFuture<Vector3f> {
+        val asyncFuture = AsyncFuture<Vector3f>()
+        val request = ColorTraceRequest(
+            cameraOrigin = cameraOrigin,
+            direction = direction,
+            asyncFuture = asyncFuture
+        )
 
- */
+        this.requestColor.add(request)
 
-    init {
-        initialize(true)
+        return asyncFuture
+    }
+
+    fun getWorldColors(
+
+//        rayOrigins: Array<Vector3f>,
+//        directions: Array<Vector3f>,
+        root: BVHTree,
+        flattenRoot: Array<FlatBVHNode>
+    ) {
+        updateBVHTree(root, flattenRoot)
+
+        val bvhSize = flattenRoot.size
+
+        val localRequestList = requestColor.toList()
+
+        val rayOrigins = localRequestList.map { it.cameraOrigin }
+        val directions = localRequestList.map { it.direction }
+
+
+        val requestSize = rayOrigins.size
+//        println(requestSize)
+        if(requestSize == 0) return
+        val rayOriginsBuffer = ByteBuffer.allocate(4 * 4 * requestSize); rayOriginsBuffer.order(ByteOrder.nativeOrder())
+        val directionsBuffer = ByteBuffer.allocate(4 * 4 * requestSize); directionsBuffer.order(ByteOrder.nativeOrder())
+
+        for (origin in rayOrigins)
+            rayOriginsBuffer.putFloat(origin.x)   .putFloat(origin.y)   .putFloat(origin.z)   .putFloat(0.0f)
+        for (direction in directions)
+            directionsBuffer.putFloat(direction.x).putFloat(direction.y).putFloat(direction.z).putFloat(0.0f)
+
+        /* BVH Node Data */
+        val aabbMinBuffer                    = ByteBuffer.allocate(bvhSize * 16);        aabbMinBuffer                 .order(ByteOrder.nativeOrder())
+        val aabbMaxBuffer                    = ByteBuffer.allocate(bvhSize * 16);        aabbMaxBuffer                 .order(ByteOrder.nativeOrder())
+        val leftLeafIndexBuffer              = ByteBuffer.allocate(bvhSize * 4);         leftLeafIndexBuffer           .order(ByteOrder.nativeOrder())
+        val rightLeafIndexBuffer             = ByteBuffer.allocate(bvhSize * 4);         rightLeafIndexBuffer          .order(ByteOrder.nativeOrder())
+        val isLeafBuffer                     = ByteBuffer.allocate(bvhSize * 4);         isLeafBuffer                  .order(ByteOrder.nativeOrder())
+        val blockPositionBuffer              = ByteBuffer.allocate(bvhSize * 16);        blockPositionBuffer           .order(ByteOrder.nativeOrder())
+        val materialOffsetBuffer             = ByteBuffer.allocate(bvhSize * 4);         materialOffsetBuffer          .order(ByteOrder.nativeOrder())
+        val materialIndexBuffer              = ByteBuffer.allocate(bvhSize * 4);         materialIndexBuffer           .order(ByteOrder.nativeOrder())
+        val weightFunctionArgumentsBuffer    = ByteBuffer.allocate(bvhSize * 16);        weightFunctionArgumentsBuffer .order(ByteOrder.nativeOrder())
+
+        val materialSize = RayTraceMaterial.materials.size
+        /* Material Type Data */
+        val materialFuncIdBuffer             = ByteBuffer.allocate(materialSize * 4);    materialFuncIdBuffer          .order(ByteOrder.nativeOrder())
+        val materialSpreadBuffer             = ByteBuffer.allocate(materialSize * 4);    materialSpreadBuffer          .order(ByteOrder.nativeOrder())
+        val materialSampleBuffer             = ByteBuffer.allocate(materialSize * 4);    materialSampleBuffer          .order(ByteOrder.nativeOrder())
+        val materialIsLightBuffer            = ByteBuffer.allocate(materialSize * 4);    materialIsLightBuffer         .order(ByteOrder.nativeOrder())
+        val lightColor                       = ByteBuffer.allocate(materialSize * 16);   lightColor                    .order(ByteOrder.nativeOrder())
+        val lightBrightness                  = ByteBuffer.allocate(materialSize * 4);    lightBrightness               .order(ByteOrder.nativeOrder())
+
+        val randoms                          = ByteBuffer.allocate(10001 * 4);           randoms                       .order(ByteOrder.nativeOrder())
+
+        val maxReflectionTimes = 3
+        val currentTime = 6000
+        val maxSingleRayCount = 20
+        val maxPixelRaysCount = 20 * 20 * 20 // 20 ^ 3
+
+
+        for (i in 0 until 10000) {
+            randoms.putFloat(Random.nextFloat())
+        }
+        run {
+            for (node in flattenRoot) {  // Init by default value
+                aabbMinBuffer.putFloat(node.min.x).putFloat(node.min.y).putFloat(node.min.z).putFloat(0f)
+                aabbMaxBuffer.putFloat(node.max.x).putFloat(node.max.y).putFloat(node.max.z).putFloat(0f)
+                leftLeafIndexBuffer.putInt(node.leftIndex)
+                rightLeafIndexBuffer.putInt(node.rightIndex)
+                isLeafBuffer.putInt(node.isLeaf)
+                blockPositionBuffer.putFloat(node.blockPosition.x).putFloat(node.blockPosition.y)
+                    .putFloat(node.blockPosition.z).putFloat(0f)
+                materialOffsetBuffer.putInt(node.textureOffset)
+                val materialInstance = RayTraceMaterial.getMaterialReflection(node.materialIndex)
+                val argsLength = materialInstance.elseArgs.size
+
+                materialIndexBuffer.putInt(node.materialIndex)
+                weightFunctionArgumentsBuffer
+                    .putFloat(if (argsLength >= 1) materialInstance.elseArgs[0].toFloat() else 0.0f)
+                    .putFloat(if (argsLength >= 2) materialInstance.elseArgs[1].toFloat() else 0.0f)
+                    .putFloat(if (argsLength >= 3) materialInstance.elseArgs[2].toFloat() else 0.0f).putFloat(0f)
+            }
+
+            val orderedMaterials = RayTraceMaterial.materials.values.sortedBy { it.materialId }
+
+            for (material in orderedMaterials) {
+                materialFuncIdBuffer.putInt(material.funcId)
+                materialSpreadBuffer.putFloat(material.spread)
+                materialSampleBuffer.putInt(material.reflectionTimes)
+                if (material.isLight) {
+                    materialIsLightBuffer.putInt(1)
+                    lightColor.putFloat((material.lightColor.x / 255.0f)).putFloat(material.lightColor.y / 255.0f)
+                        .putFloat(material.lightColor.z / 255.0f).putFloat(0.0f)
+                    lightBrightness.putFloat(material.brightness)
+                } else {
+                    materialIsLightBuffer.putInt(0)
+                    lightColor.putFloat(0.0f).putFloat(0.0f).putFloat(0.0f).putFloat(0.0f)
+                    lightBrightness.putFloat(0.0f)
+                }
+            }
+        }
+        run {
+            aabbMinBuffer.rewind()
+            aabbMaxBuffer.rewind()
+            leftLeafIndexBuffer.rewind()
+            rightLeafIndexBuffer.rewind()
+            isLeafBuffer.rewind()
+            blockPositionBuffer.rewind()
+            materialOffsetBuffer.rewind()
+            weightFunctionArgumentsBuffer.rewind()
+
+            materialFuncIdBuffer.rewind()
+            materialSpreadBuffer.rewind()
+            materialSampleBuffer.rewind()
+            materialIsLightBuffer.rewind()
+            lightColor.rewind()
+            lightBrightness.rewind()
+            randoms.rewind()
+        }
+
+        fun clBuffer(data: ByteBuffer, flags: Long, size: Long): cl_mem {
+//            val bufferSize = data.remaining().toLong()
+            val bufferSize = size
+//            println("Allocate buffer size $bufferSize")
+            return clCreateBuffer(context, flags or CL_MEM_COPY_HOST_PTR.toLong(), bufferSize, Pointer.to(data), null)
+        }
+        fun intArrayToClMem(array: IntArray): cl_mem {
+            val buffer = ByteBuffer.allocateDirect(array.size * 4)  // 每个 int 4 字节
+                .order(ByteOrder.nativeOrder())
+            for (value in array) buffer.putInt(value)
+            buffer.rewind()
+
+            return clCreateBuffer(
+                context,
+                CL_MEM_READ_ONLY or CL_MEM_COPY_HOST_PTR.toLong(),
+                buffer.remaining().toLong(),
+                Pointer.to(buffer),
+                null
+            )
+        }
+
+        val clRayOrigins = clBuffer(rayOriginsBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+        val clRayDirs = clBuffer(directionsBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+        val clAabbMin = clBuffer(aabbMinBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+        val clAabbMax = clBuffer(aabbMaxBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+        val clLeft = clBuffer(leftLeafIndexBuffer, CL_MEM_READ_ONLY, bvhSize * 4L)
+        val clRight = clBuffer(rightLeafIndexBuffer, CL_MEM_READ_ONLY, bvhSize * 4L)
+        val clLeaf = clBuffer(isLeafBuffer, CL_MEM_READ_ONLY, bvhSize * 4L)
+        val clBlock = clBuffer(blockPositionBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+        val clMatOffset = clBuffer(materialOffsetBuffer, CL_MEM_READ_ONLY, bvhSize * 4L)
+        val clMaterialIndex = clBuffer(materialIndexBuffer, CL_MEM_READ_ONLY, bvhSize * 4L)
+        val clWeightArgs = clBuffer(weightFunctionArgumentsBuffer, CL_MEM_READ_ONLY, bvhSize * 16L)
+
+        val clRandoms = clBuffer(randoms, CL_MEM_READ_ONLY, 10001 * 4L)
+
+        val clMatFunc = clBuffer(materialFuncIdBuffer, CL_MEM_READ_ONLY, materialSize * 4L)
+        val clMatSpread = clBuffer(materialSpreadBuffer, CL_MEM_READ_ONLY, materialSize * 4L)
+        val clMatSample = clBuffer(materialSampleBuffer, CL_MEM_READ_ONLY, materialSize * 4L)
+        val clMatLight = clBuffer(materialIsLightBuffer, CL_MEM_READ_ONLY, materialSize * 4L)
+        val clLightColor = clBuffer(lightColor, CL_MEM_READ_ONLY, materialSize * 16L)
+        val clLightBright = clBuffer(lightBrightness, CL_MEM_READ_ONLY, materialSize * 4L)
+        val clTextureArray = intArrayToClMem(TextureManager.textureArray)
+
+        val dummyRayBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, (650 * 1024 * 1024).toLong(), null, null)
+        val dummyColorBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, (380 * 1024 * 1024).toLong(), null, null)
+        val dummyUpdateBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, (100 * 1024 * 1024).toLong(), null, null)
+
+//        return clCreateBuffer(context, flags or CL_MEM_COPY_HOST_PTR.toLong(), bufferSize, Pointer.to(data), null)
+        println(requestSize)
+        val outputColorBuffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 16L * requestSize, null, null)
+
+        var argIndex = 0
+        fun arg(buffer: cl_mem, size: Long) {
+//            println("size: $size")
+            clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to(buffer))
+        }
+        val float3Size = 12 + 4L
+        val intSize = 4L
+        val floatSize = 4L
+
+        arg(clRayOrigins, float3Size * requestSize)
+        arg(clRayDirs, float3Size * requestSize)
+        arg(clAabbMin, float3Size * bvhSize)
+        arg(clAabbMax, float3Size * bvhSize)
+        arg(clLeft, intSize * bvhSize)
+        arg(clRight, intSize * bvhSize)
+        arg(clLeaf, intSize * bvhSize)
+        arg(clBlock, float3Size * bvhSize)
+        arg(clMatOffset, intSize * bvhSize)
+        arg(clMaterialIndex, intSize * bvhSize)
+        arg(clWeightArgs, float3Size * bvhSize)
+        arg(clMatFunc, intSize * materialSize)
+        arg(clMatSpread, floatSize * materialSize)
+        arg(clMatSample, intSize * materialSize)
+        arg(clMatLight, intSize * materialSize)
+        arg(clLightColor, float3Size * materialSize)
+        arg(clLightBright, floatSize * materialSize)
+        arg(clTextureArray, intSize * TextureManager.textureArray.size)
+        arg(clRandoms, floatSize * 10001)
+
+//        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to(Pointer.to(buffer)))
+//        arg(dummyRayBuffer, (650 * 1024 * 1024).toLong())
+//        arg(dummyColorBuffer, (380 * 1024 * 1024).toLong())
+//        arg(dummyUpdateBuffer, (55 * 1024 * 1024).toLong())
+
+        val tempMaxReflectionBuffer = ByteBuffer.allocate(maxReflectionTimes); tempMaxReflectionBuffer.order(ByteOrder.nativeOrder())
+        val tempCurrentTimeBuffer = ByteBuffer.allocate(maxReflectionTimes); tempCurrentTimeBuffer.order(ByteOrder.nativeOrder())
+        val tempMaxSingleRayCountBuffer = ByteBuffer.allocate(maxSingleRayCount); tempMaxSingleRayCountBuffer.order(ByteOrder.nativeOrder())
+        val tempMaxPixelRaysCountBuffer = ByteBuffer.allocate(maxPixelRaysCount); tempMaxPixelRaysCountBuffer.order(ByteOrder.nativeOrder())
+
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to(tempMaxReflectionBuffer))
+
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((dummyRayBuffer)))
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((dummyColorBuffer)))
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((dummyUpdateBuffer)))
+
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((tempCurrentTimeBuffer)))
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((tempMaxSingleRayCountBuffer)))
+        clSetKernelArg(rayTraceKernel, argIndex++, Sizeof.cl_mem.toLong(), Pointer.to((tempMaxPixelRaysCountBuffer)))
+
+        arg(outputColorBuffer, float3Size * requestSize)
+//        println(commandQueue)
+
+        clEnqueueNDRangeKernel(commandQueue, rayTraceKernel, 1, null, longArrayOf(requestSize.toLong()), null, 0, null, null)
+
+//            val status = clFinish(commandQueue)
+//        if(status != CL_SUCCESS) error("[GPU] OpenCL failed in $status") // 未输出
+
+        val bufferSize = requestSize * 16
+        val outputBuffer = ByteBuffer.allocateDirect(bufferSize); outputBuffer.order(ByteOrder.nativeOrder())
+
+//        val outputBuffer = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
+        outputBuffer.position(0)
+
+// 从 GPU 读取结果数据到 outputBuffer
+        clEnqueueReadBuffer(
+            commandQueue,
+            outputColorBuffer,
+            CL.CL_TRUE,
+            0,
+            bufferSize.toLong(), // 读取字节数
+            Pointer.to(outputBuffer),
+            0,
+            null,
+            null
+        )
+
+// 将 ByteBuffer 映射为 FloatBuffer，便于以 float 形式读取
+        val floatBuffer: FloatBuffer = outputBuffer.asFloatBuffer()
+
+// 构造结果数组，忽略每个元素的第 4 个 float（padding）
+        val result = Array(requestSize) {
+            val x = floatBuffer.get()
+            val y = floatBuffer.get()
+            val z = floatBuffer.get()
+            floatBuffer.get() // 跳过 padding
+            Vector3f(x, y, z)
+        }
+        for ((index, f) in result.withIndex()) localRequestList[index].asyncFuture.set(f)
+        requestColor.clear()
+        fun releaseClMem(vararg mems: cl_mem?) {
+            for (mem in mems) {
+                if (mem != null) clReleaseMemObject(mem)
+            }
+        }
+        releaseClMem(
+            clRayOrigins, clRayDirs, clAabbMin, clAabbMax, clLeft, clRight, clLeaf, clBlock,
+            clMatOffset, clMaterialIndex, clWeightArgs,
+            clMatFunc, clMatSpread, clMatSample, clMatLight, clLightColor, clLightBright,
+            clTextureArray, dummyRayBuffer, dummyColorBuffer, dummyUpdateBuffer, outputColorBuffer
+        )
     }
 
     fun initialize(debug: Boolean = false) {
@@ -394,19 +633,19 @@ object JoclInterface {
         device = devices[0]!!
 
         context = clCreateContext(null, 1, arrayOf(device), null, null, null)
-        commandQueueThreadPool = ThreadLocal.withInitial {
-            clCreateCommandQueueWithProperties(context, device, null, null)
+        val err = IntArray(1) { 0 }
+        commandQueue = clCreateCommandQueueWithProperties(context, device, null, err)
+        if(err[0] != CL_SUCCESS) {
+            error("[GPU] OpenCL failed in $err")
         }
-
         println("[GPU] Compiling CLScripts...")
         preCompilePrograms()
         println("[GPU] OpenCL Initialized.")
         startDaemonThreads()
-        println("[GPU] Daemon threads initialized.")
     }
 
     fun preCompilePrograms() {
-        rayTraceKernel = (preCompileProgram("rt2", "rayTrace"))
+        rayTraceKernel = (preCompileProgram("rt3", "getWorldColor"))
     }
 
     fun preCompileProgram(kernelFileName: String, kernelName: String): cl_kernel{

@@ -1,8 +1,6 @@
 package com.methyleneblue.camera.texture
 
-import org.bukkit.Bukkit
 import org.bukkit.Material
-import org.bukkit.Particle
 import org.bukkit.block.BlockFace
 import org.bukkit.block.BlockFace.DOWN
 import org.bukkit.block.BlockFace.EAST
@@ -24,31 +22,34 @@ import kotlin.math.floor
 
 object TextureManager {
     private val textureBlockFaceCache = ConcurrentHashMap<Material?, EnumMap<BlockFace?, BufferedImage?>?>()
+    private val materialOffset = hashMapOf<Material, Int>()
     private val textureCache = ConcurrentHashMap<Material?, BufferedImage?>()
     private var texturesPath: File? = null
     private var normalsPath: File? = null
 
+    val textureArray: IntArray = IntArray(10020800) { 0 }
+
     internal val FACE_SUFFIXES: EnumMap<BlockFace?, String> = EnumMap<BlockFace?, String>(
         Map.of<BlockFace?, String?>(
-            BlockFace.UP, "top",
-            BlockFace.DOWN, "bottom",
-            BlockFace.NORTH, "north",
-            BlockFace.EAST, "east",
-            BlockFace.SOUTH, "south",
-            BlockFace.WEST, "west"
+            UP, "top",
+            DOWN, "bottom",
+            NORTH, "north",
+            EAST, "east",
+            SOUTH, "south",
+            WEST, "west"
         )
     )
 
     fun init() {
         initialize()
         preloadAllTextures()
+        prepareTextureBuffer()
     }
-
     private fun initialize() {
 //        texturesPath = File(Bukkit.getPluginsFolder().getPath() + "\\Camera\\textures")
         texturesPath = File("I:\\downloads\\Downloads\\新建文件夹 (2)\\plugins\\Camera\\textures")
 //        normalsPath = File(Bukkit.getPluginsFolder().getPath() + "\\Camera\\normals")
-        normalsPath = File("I:\\downloads\\Downloads\\新建文件夹 (2)\\plugins\\Camera\\textures")
+        normalsPath = File("I:\\downloads\\Downloads\\新建文件夹 (2)\\plugins\\Camera\\normals")
 
         if (!texturesPath!!.exists()) {
             // noinspection ResultOfMethodCallIgnored
@@ -71,7 +72,7 @@ object TextureManager {
                 try {
                     cacheTexture(material, ImageIO.read(textureFile))
                     continue
-                } catch (ignored: IOException) {
+                } catch (_: IOException) {
                 }
             }
             for (entry in FACE_SUFFIXES.entries) {
@@ -127,6 +128,43 @@ object TextureManager {
         throw IllegalArgumentException("Unknown block texture: " + textureFileName)
     }
 
+    private fun flatImage(image: BufferedImage): IntArray {
+        val width = image.width
+        val height = image.height
+        val pixels = IntArray(width * height)
+        image.getRGB(0, 0, width, height, pixels, 0, width)
+        return pixels
+    }
+
+    fun getMaterialOffset(material: Material): Int = materialOffset[material] ?: 0
+
+    private val blockFaceToCLIndex = mapOf(
+        BlockFace.WEST  to 0,   // X-
+        BlockFace.EAST  to 1,   // X+
+        BlockFace.DOWN  to 2,   // Y-
+        BlockFace.UP    to 3,     // Y+
+        BlockFace.NORTH to 4,  // Z-
+        BlockFace.SOUTH to 5   // Z+
+    )
+
+    fun prepareTextureBuffer() {
+        var currentIndex = 0
+        Material.entries.forEach { material ->
+            if (material.isBlock && material != Material.AIR) {
+                materialOffset[material] = currentIndex
+                for (face in BlockFace.entries) {
+                    val clIndex = blockFaceToCLIndex[face] ?: continue
+                    val flatTexture = flatImage(getTexture(material, face)
+                        ?: continue)
+                    val faceOffset = clIndex * 256
+                    val absoluteOffset = currentIndex + faceOffset
+                    flatTexture.copyInto(textureArray, destinationOffset = absoluteOffset)
+                }
+                currentIndex += 6 * 256
+            }
+        }
+    }
+
     fun getTexture(material: Material, face: BlockFace): BufferedImage? {
         if (textureCache.containsKey(material)) return textureCache.get(material)
         if (textureBlockFaceCache.containsKey(material)) textureBlockFaceCache.get(material)!!.get(face)
@@ -135,7 +173,7 @@ object TextureManager {
 
     private fun cacheTexture(material: Material, face: BlockFace, image: BufferedImage) {
         textureBlockFaceCache.computeIfAbsent(material) { k: Material? ->
-            java.util.EnumMap<BlockFace?, BufferedImage?>(
+            EnumMap<BlockFace?, BufferedImage?>(
                 BlockFace::class.java
             )
         }!!.put(face, image)
@@ -160,32 +198,32 @@ object TextureManager {
         val v: Float
 
         when (face) {
-            BlockFace.NORTH -> {
+            NORTH -> {
                 u = 1.0f - hitX
                 v = 1.0f - hitY
             }
 
-            BlockFace.SOUTH -> {
+            SOUTH -> {
                 u = hitX
                 v = 1.0f - hitY
             }
 
-            BlockFace.EAST -> {
+            EAST -> {
                 u = 1.0f - hitZ
                 v = 1.0f - hitY
             }
 
-            BlockFace.WEST -> {
+            WEST -> {
                 u = hitZ
                 v = 1.0f - hitY
             }
 
-            BlockFace.UP -> {
+            UP -> {
                 u = hitX
                 v = 1.0f - hitZ
             }
 
-            BlockFace.DOWN -> {
+            DOWN -> {
                 u = hitX
                 v = hitZ
             }
@@ -219,8 +257,8 @@ object TextureManager {
 
         // 应该是因为CPU始终不返回NULL
         if(image == null) {
-            println("Material: ${hitBlockType} Face: $hitFace")
-            Bukkit.getWorlds()[0].spawnParticle(Particle.ELECTRIC_SPARK, hitPosition.x.toDouble(), hitPosition.y.toDouble(), hitPosition.z.toDouble(), 1, 0.0, 0.0, 0.0, 0.0, null, true)
+            // println("Material: ${hitBlockType} Face: $hitFace")
+            // Bukkit.getWorlds()[0].spawnParticle(Particle.ELECTRIC_SPARK, hitPosition.x.toDouble(), hitPosition.y.toDouble(), hitPosition.z.toDouble(), 1, 0.0, 0.0, 0.0, 0.0, null, true)
             return skyColor(currentTime)
         }
 
@@ -233,9 +271,9 @@ object TextureManager {
         )
         val relativeHit = Vector3f(hitPosition).sub(integerLocation)
 
-        val x = relativeHit.x.toFloat()
-        val y = relativeHit.y.toFloat()
-        val z = relativeHit.z.toFloat()
+        relativeHit.x.toFloat()
+        relativeHit.y.toFloat()
+        relativeHit.z.toFloat()
         val texX: Float
         val texY: Float
         val width = image.width.toFloat()
@@ -277,7 +315,7 @@ object TextureManager {
 
 
 //        println(relativeHit)
-        val pts = TextureManager.getTextureCoords(hitFace, relativeHit.x, relativeHit.y, relativeHit.z, width.toInt(), height.toInt())
+        val pts = getTextureCoords(hitFace, relativeHit.x, relativeHit.y, relativeHit.z, width.toInt(), height.toInt())
 //        println(pts.toTypedArray().contentToString())
 //        println()
         texX = pts[0].toFloat()
@@ -287,7 +325,7 @@ object TextureManager {
         val clampedY = texY.coerceIn(0f, height - 1)
 
         val baseColor = Color(image.getRGB(clampedX.toInt(), clampedY.toInt()))
-        if (hitFace == BlockFace.UP) {
+        if (hitFace == UP) {
             return baseColor
         } else {
             return Color(

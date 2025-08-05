@@ -1,8 +1,11 @@
 package com.methyleneblue.camera.util
 
+import org.bukkit.Color
+import org.bukkit.Location
 import org.bukkit.block.BlockFace
 import org.joml.Vector3d
 import org.joml.Vector3f
+import java.util.concurrent.ThreadLocalRandom
 import kotlin.math.PI
 import kotlin.math.acos
 import kotlin.math.cos
@@ -34,6 +37,10 @@ object VectorUtil {
         }
         val temp = normal.mul(2 * dot)
         reflection.sub(temp)
+
+        output.x = reflection.x
+        output.y = reflection.y
+        output.z = reflection.z
 
         return reflection
     }
@@ -138,14 +145,21 @@ object VectorUtil {
     }
 
     // Uniform random unit vector on the whole sphere
+    private val threadVec = ThreadLocal.withInitial { Vector3f() }
+
     fun randomUnitVector(): Vector3f {
-        val theta = Random.Default.nextDouble(0.0, 2 * PI)
-        val z = Random.Default.nextFloat(-1f, 1f)
-        val r = sqrt(1.0 - z * z)
-        return Vector3f().apply {
-            x = (r * cos(theta)).toFloat()
-            y = (r * sin(theta)).toFloat()
-            this.z = z.toFloat()
+        val rng = ThreadLocalRandom.current()
+        val vec = threadVec.get()
+
+        while (true) {
+            val x = rng.nextFloat(-1f, 1f)
+            val y = rng.nextFloat(-1f, 1f)
+            val z = rng.nextFloat(-1f, 1f)
+            val lenSq = x * x + y * y + z * z
+            if (lenSq in 1e-5f..1f) {
+                val invLen = 1f / sqrt(lenSq)
+                return vec.set(x * invLen, y * invLen, z * invLen)
+            }
         }
     }
 
@@ -179,4 +193,11 @@ fun Vector3d.get(i: Int): Double {
         2 -> z();
         else -> throw IllegalArgumentException("Invalid axis: " + i);
     };
+}
+fun Location.toVector3f(): Vector3f {
+    return Vector3f(this.x.toFloat(), this.y.toFloat(), this.z.toFloat())
+}
+
+fun Vector3f.toColorInteger(): Int {
+    return java.awt.Color((this.x * 255.0f).toInt(), (this.y * 255.0f).toInt(), (this.z * 255.0f).toInt()).rgb
 }

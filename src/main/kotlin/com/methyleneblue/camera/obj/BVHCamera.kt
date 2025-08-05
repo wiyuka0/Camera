@@ -4,18 +4,22 @@ import com.methyleneblue.camera.raytracepack.bvh.BVHTree
 import com.methyleneblue.camera.raytracepack.bvh.BVHTree.Companion.getBVHTree
 import com.methyleneblue.camera.raytracepack.bvh.FlatBVHNode
 import com.methyleneblue.camera.raytracepack.bvh.HitResult
-import net.kyori.adventure.bossbar.BossBar
-import net.kyori.adventure.text.Component
+import com.methyleneblue.camera.util.toVector3f
 import org.bukkit.Bukkit
 import org.bukkit.Location
+import org.bukkit.boss.BarColor
+import org.bukkit.boss.BarStyle
+import org.bukkit.boss.BossBar
 import org.bukkit.entity.Player
 import org.bukkit.util.Vector
 import org.joml.Vector3f
 import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import javax.imageio.ImageIO
 import kotlin.math.ln
 import kotlin.math.tan
 
@@ -24,129 +28,29 @@ abstract class BVHCamera(
     size: Pair<Int, Int>,
     fov: Double,
     distance: Double,
+    progressBar: BossBar?,
     bufferedImage: BufferedImage,
-    depthImage: BufferedImage
+    depthImage: Array<FloatArray>
     ): CameraObject(
     location = location,
     size,
     fov,
     distance,
+    progressBar,
     bufferedImage,
     depthImage,
 ) {
 
-    abstract fun getColorInWorld(rayTraceResult: HitResult?, startDir: Vector3f, flatBVHNode: Array<FlatBVHNode>, bvhTree: BVHTree): Color
-
-    /* Single Thread */
-//    override fun updateCamera(player: Player?, mixinTimes: Int): BufferedImage {
-//        val bvhTree = getBVHTree(location, distance.toInt())
-//        val flatBVHNode = bvhTree.root!!.flatten()
-//
-//        val width = size.first
-//        val height = size.second
-//        val aspectRatio = width.toFloat() / height.toFloat()
-//        val fovRad = Math.toRadians(fov)
-//
-//        val forward = location.direction.normalize()
-//        val upVector = Vector(0.0, 1.0, 0.0)
-//        val right = forward.clone().crossProduct(upVector).normalize()
-//        val up = right.clone().crossProduct(forward).normalize()
-//
-//        val halfWidth = tan(fovRad / 2.0)
-//        val halfHeight = halfWidth / aspectRatio
-//
-//        val totalRayTraceCount = width * height
-//        val totalRayTraceCountFloat = totalRayTraceCount.toFloat()
-//
-//        var progressBar: BossBar? = null
-//        val useBossBar = player != null
-//
-//        if (useBossBar) {
-//            progressBar = BossBar.bossBar(Component.text("渲染进度"), 0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS)
-//            Bukkit.getOnlinePlayers().filter { it.isOp }.forEach { it.showBossBar(progressBar) }
-//        }
-//
-//        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-//        var count = 0
-//
-//        val updatePerTimes = max(1, totalRayTraceCount / 1000)
-//
-//        data class Pack(val i: Int, val j: Int, val result: AsyncFuture<HitResult?>)
-//        val future1: MutableList<Pack> = mutableListOf()
-//
-//        for (j in 0 until height) {
-//            val v = (1.0 - (j + 0.5) / height) * 2 - 1
-//            for (i in 0 until width) {
-//                val u = ((i + 0.5) / width) * 2 - 1
-//                count++
-//
-//                if (useBossBar && count % updatePerTimes == 0) {
-//                    progressBar?.progress((count.toFloat() / totalRayTraceCountFloat).coerceIn(0f, 1f))
-//                }
-//
-//                val dir = forward.clone()
-//                    .add(right.clone().multiply(u * halfWidth))
-//                    .add(up.clone().multiply(v * halfHeight))
-//                    .normalize()
-//
-//                // val target = location.clone().add(dir.clone().multiply(5))
-//                // location.world.spawnParticle(Particle.ELECTRIC_SPARK, target.x, target.y, target.z, 1, 0.0, 0.0, 0.0, 0.0, null, true)
-//
-////                val hit = bvhTree.rayTrace(location.toVector().toVector3f(), dir.toVector3f())
-//
-//                val hit = JoclInterface.traceRay(location.toVector().toVector3f(), dir.toVector3f())
-//
-//                future1.add(Pack(
-//                    i, j, hit
-//                ))
-//            }
-//        }
-//        val arrayFlatBVHNode = flatBVHNode.toTypedArray()
-//
-//        JoclInterface.processResults(arrayFlatBVHNode, bvhTree)
-//
-//        for ((i, j, pack) in future1) {
-//            val hit = pack.get()
-//
-//            if(hit == null) {
-//                val skyColor = TextureManager.skyColor(time = location.world.time)
-//                image.setRGB(i, j, skyColor.rgb)
-//                continue
-//            }
-//            val dir = hit.direction
-//            val rayDir = Vector3f(dir)
-//            var rSum = 0
-//            var gSum = 0
-//            var bSum = 0
-//
-//            repeat(mixinTimes) {
-//                val color = getColorInWorld(hit, Vector3f(rayDir), arrayFlatBVHNode, bvhTree)
-//                rSum += color.red
-//                gSum += color.green
-//                bSum += color.blue
-//            }
-//
-//            val rAvg = rSum / mixinTimes
-//            val gAvg = gSum / mixinTimes
-//            val bAvg = bSum / mixinTimes
-//
-//            image.setRGB(i, j, Color(rAvg, gAvg, bAvg).rgb)
-//        }
-//
-//        progressBar?.let { bar ->
-//            Bukkit.getOnlinePlayers().filter { it.isOp }.forEach { it.hideBossBar(bar) }
-//        }
-//
-//        bufferedImage = image
-//        return image
-//    }
+    abstract fun getColorInWorld(rayTraceResult: HitResult?, startDir: Vector3f, flatBVHNode: Array<FlatBVHNode>, bvhTree: BVHTree):Color
 
     /* Multi Thread*/
-    override fun updateCamera(player: Player?, mixinTimes: Int, maxDepth: Float): Pair<BufferedImage, BufferedImage> {
-
-        val depthImage = BufferedImage(this.bufferedImage.width, this.bufferedImage.height, BufferedImage.TYPE_INT_RGB)
+    override fun updateCamera(player: Player?, mixinTimes: Int, maxDepth: Float): Pair<BufferedImage, Array<FloatArray>> {
+        val depthImage = Array(bufferedImage.width) { FloatArray(bufferedImage.height) { 0f } }
 
         val executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+
+        progressBar?.setTitle("渲染 - 构建 BVH 树")
+        progressBar?.progress = 1.0
 
         val bvhTree = getBVHTree(location, distance.toInt())
         val flatBVHNode = bvhTree.root!!.flatten().toTypedArray()
@@ -166,21 +70,11 @@ abstract class BVHCamera(
         val numThreads = Runtime.getRuntime().availableProcessors()
         val rowsPerThread = height / numThreads
 
-
         val totalRayTraceCount = width * height
-        val totalRayTraceCountFloat = totalRayTraceCount.toFloat()
+        val totalRayTraceCountDouble = totalRayTraceCount.toDouble()
 
-        val useBossBar = player != null
-
-        var progressBar: BossBar? = null
-        if (useBossBar) {
-            progressBar = BossBar.bossBar(Component.text("渲染进度"), 0f, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS)
-            for (player in Bukkit.getOnlinePlayers()) {
-                if (player.isOp) {
-                    player.showBossBar(progressBar)
-                }
-            }
-        }
+        progressBar?.setTitle("渲染 - 射线追踪")
+        progressBar?.progress = 0.0
 
         var currentRayTraceCount = AtomicInteger(0)
         val results = Array<BufferedImage?>(numThreads) { null }
@@ -196,23 +90,31 @@ abstract class BVHCamera(
                     for (i in 0 until width) {
                         val u = ((i + 0.5) / width) * 2 - 1
                         val count = currentRayTraceCount.incrementAndGet()
-                        if (count % 10000 == 0 && useBossBar) progressBar?.progress((count.toFloat() / totalRayTraceCountFloat).toFloat())
+                        if (count % 1000 == 0) progressBar?.progress = count.toDouble() / totalRayTraceCountDouble
 
                         val dir = forward.clone()
                             .add(right.clone().multiply(u * halfWidth))
                             .add(up.clone().multiply(v * halfHeight))
                             .normalize()
 
-                        val result = bvhTree.rayTrace(location.toVector().toVector3f(), dir.toVector3f())
+//                        val result = bvhTree.rayTrace(location.toVector().toVector3f(), dir.toVector3f())
+                        val hitResult = location.world.rayTraceBlocks(location, dir, distance)
 
-                        val distance = result?.distance
+                        val distance = hitResult?.hitPosition?.distance(location.toVector())?.toFloat() ?: 0.0f
+                        val result = HitResult(
+                            hitPosition = hitResult?.hitPosition?.toVector3f(),
+                            distance = distance,
+                            face = hitResult?.hitBlockFace,
+                            startPos = location.toVector3f(),
+                            direction = dir.toVector3f(),
+                        )
+
+//                        val distance = result?.distance
 
                         if (distance != null) {
-                            val logDepth = ln(distance + 1e-6) / ln(1.0 + 1e-6 + 1.0)
-                            val depthColor = logDepth.toInt().coerceAtLeast(0)
+                            val logDepth = ln(distance + 1.0)
 
-                            val rgb = depthColor and 0xFFFFFFFF.toInt()
-                            depthImage.setRGB(i, j - startRow, rgb)
+                            depthImage[i][j] = logDepth.toFloat()
                         }
 
                         var rSum = 0
@@ -253,15 +155,40 @@ abstract class BVHCamera(
         }
         g.dispose()
 
-        progressBar?.let {
-            for (player in Bukkit.getOnlinePlayers()) {
-                if (player.isOp) {
-                    player.hideBossBar(it)
+        bufferedImage = finalImage
+        this.depthImage = depthImage
+
+        var minLog = Float.MAX_VALUE
+        var maxLog = Float.MIN_VALUE
+
+        for (row in depthImage) {
+            for (depth in row) {
+                minLog = minOf(minLog, depth)
+                maxLog = maxOf(maxLog, depth)
+            }
+        }
+
+        val logImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val depth = depthImage[x][y]
+
+                if (depth < 0.0f) {
+                    logImage.setRGB(x, y, 0xFFFF0000.toInt())
+                } else if (depth == 0.0f) {
+                    logImage.setRGB(x, y, 0xFF0000FF.toInt())
+                } else {
+                    val normalized = (depth - minLog) / (maxLog - minLog)
+                    val gray = (normalized.coerceIn(0f, 1f) * 255.0f).toInt()
+
+                    val rgb = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+                    logImage.setRGB(x, y, rgb)
                 }
             }
         }
-        bufferedImage = finalImage
-        this.depthImage = depthImage
+
+        ImageIO.write(logImage, "png", File("C:\\image\\depth_output.png"))
 
         return finalImage to depthImage
     }

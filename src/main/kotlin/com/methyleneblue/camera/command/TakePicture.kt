@@ -3,12 +3,16 @@ package com.methyleneblue.camera.command
 import com.methyleneblue.camera.CameraManager
 import com.methyleneblue.camera.imagepack.AfterEffect
 import com.methyleneblue.camera.imagepack.aftereffect.Bloom
+import org.bukkit.Bukkit
+import org.bukkit.boss.BarColor
+import org.bukkit.boss.BarStyle
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.Array
 
 class TakePicture: CommandExecutor {
 
@@ -26,16 +30,31 @@ class TakePicture: CommandExecutor {
                 p0.sendMessage("Generating Picture...")
                 val start = System.currentTimeMillis()
                 val mixinTimes = p3[3].toInt()
+
+                cameraInstance.progressBar?.removeAll()
+                if (cameraInstance.progressBar == null) {
+                    cameraInstance.progressBar = Bukkit.createBossBar("", BarColor.GREEN, BarStyle.SOLID)
+                }
+                for (player in Bukkit.getOnlinePlayers()) {
+                    if (player.isOp) {
+                        cameraInstance.progressBar?.addPlayer(player)
+                    }
+                }
+
                 cameraInstance.updateCamera(p0 as Player, mixinTimes)
-                val end = System.currentTimeMillis()
-                val duration = end - start
-                p0.sendMessage("Finished generate in time $duration ms")
 
                 val path = p3[1]
                 val file = File(path)
                 val fileName = p3[2]
                 if (!file.exists()) file.mkdirs()
-                val output = AfterEffect.apply(cameraInstance.bufferedImage, cameraInstance.depthImage, 90.0)
+
+                val output = AfterEffect.apply(cameraInstance.bufferedImage, cameraInstance.depthImage, cameraInstance.fov, cameraInstance.progressBar)
+
+                cameraInstance.progressBar?.removeAll()
+
+                val end = System.currentTimeMillis()
+                val duration = end - start
+                p0.sendMessage("Finished generate in time $duration ms")
                 ImageIO.write(output, "png", File(file, "${fileName}.png"))
             } catch (e : Exception) {
                 e.printStackTrace()

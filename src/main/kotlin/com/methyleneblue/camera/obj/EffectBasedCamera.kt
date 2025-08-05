@@ -9,6 +9,7 @@ import com.methyleneblue.camera.texture.TextureManager.skyColor
 import com.methyleneblue.camera.util.VectorUtil
 import org.bukkit.Bukkit
 import org.bukkit.Location
+import org.bukkit.boss.BossBar
 import org.joml.Vector3f
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -22,13 +23,15 @@ class EffectBasedCamera(
     size: Pair<Int, Int>,
     fov: Double, // 基于横向计算
     distance: Double,
+    progressBar: BossBar?,
     bufferedImage: BufferedImage,
-    depthImage: BufferedImage
+    depthImage: Array<FloatArray>
     ): BVHCamera(
     location = location,
     size,
     fov,
     distance,
+    progressBar,
     bufferedImage,
     depthImage,
 ) {

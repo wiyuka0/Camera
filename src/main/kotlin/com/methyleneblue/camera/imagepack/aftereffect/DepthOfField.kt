@@ -2,15 +2,18 @@ package com.methyleneblue.camera.imagepack.aftereffect
 
 import com.methyleneblue.camera.imagepack.blur.DualBlur
 import com.methyleneblue.camera.imagepack.util.AdaptabilityUtil
+import org.bukkit.boss.BossBar
 import java.awt.image.BufferedImage
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.min
 
 object DepthOfField {
     fun applyEffect(
         image: BufferedImage,
-        depthImage: BufferedImage,
+        depthImage: Array<FloatArray>,
         fov: Double,
+        progressBar: BossBar? = null,
         maxBlurRadius: Float = 50f,
         depthScale: Float = 1f,
         passes: Int = 2,
@@ -22,13 +25,25 @@ object DepthOfField {
         val maxBlurRadius1 = AdaptabilityUtil.calculateRadius(width, fov, maxBlurRadius)
 
         val focusDepth = customFocusDepth ?: getCenterDepth(depthImage)
-        val blurredLayers = precomputeBlurLayers(image, (maxBlurRadius1 + 1).toInt(), passes) // Fixed .toInt()
+
+        progressBar?.setTitle("后处理 - 景深 - 预处理")
+        progressBar?.progress = 0.0
+        val blurredLayers = precomputeBlurLayers(image, ceil(maxBlurRadius1 + 1.0f).toInt(), passes, progressBar)
 
         val output = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
 
+        progressBar?.setTitle("后处理 - 景深 - 景深")
+        progressBar?.progress = 0.0
+
+        var currentCount = 0
+        val totalCount = width * height
+
         for (y in 0 until height) {
             for (x in 0 until width) {
-                val depth = depthImage.getRGB(x, y).toFloat()
+                currentCount++
+                if (currentCount % 10000 == 0) progressBar?.progress = currentCount.toDouble() / totalCount
+
+                val depth = depthImage[x][y]
 
                 val depthDiff = abs(depth - focusDepth)
                 val blurRadius = AdaptabilityUtil.calculateRadius(width, fov, depthDiff * depthScale)
@@ -42,21 +57,23 @@ object DepthOfField {
         return output
     }
 
-    private fun getCenterDepth(depthImage: BufferedImage): Float {
-        val centerX = depthImage.width / 2
-        val centerY = depthImage.height / 2
-        return depthImage.getRGB(centerX, centerY).toFloat()
+    private fun getCenterDepth(depthImage: Array<FloatArray>): Float {
+        val centerX = depthImage.size / 2
+        val centerY = depthImage[0].size / 2
+        return depthImage[centerX][centerY]
     }
 
     private fun precomputeBlurLayers(
         image: BufferedImage,
         maxBlurRadius: Int,
-        passes: Int
+        passes: Int,
+        progressBar: BossBar? = null
     ): Array<BufferedImage> {
         return Array(maxBlurRadius + 1, { radius ->
+            progressBar?.progress = radius.toDouble() / maxBlurRadius
             when (radius) {
                 0 -> image
-                else -> DualBlur.blur(image, maxBlurRadius, passes)
+                else -> DualBlur.blur(image, radius, passes)
             }
         })
     }
@@ -66,25 +83,21 @@ object DepthOfField {
         x: Int, y: Int,
         radius: Float
     ): Int {
-        val r0 = radius.toInt()
-        val r1 = r0 + 1
-        val t = radius - r0
+        val ra0 = radius.toInt()
+        val ra1 = ra0 + 1
+        val t = radius - ra0
 
-        val c0 = layers[r0].getRGB(x, y)
-        val c1 = layers[r1].getRGB(x, y)
+        val c0 = layers[ra0].getRGB(x, y)
+        val c1 = layers[ra1].getRGB(x, y)
 
-//        return (interpolate(c0.alpha, c1.alpha, t).toInt().coerceIn(0, 255) shl 24) or
-//                (interpolate(c0.red, c1.red, t).toInt().coerceIn(0, 255) shl 16) or
-//                (interpolate(c0.green, c1.green, t).toInt().coerceIn(0, 255) shl 8) or
-//                (interpolate(c0.blue, c1.blue, t).toInt().coerceIn(0, 255))
-        val a0 = (c0 ushr 24) and 0xFF
-        val r0c = (c0 ushr 16) and 0xFF
-        val g0 = (c0 ushr 8) and 0xFF
+        val a0 = (c0 shr 24) and 0xFF
+        val r0c = (c0 shr 16) and 0xFF
+        val g0 = (c0 shr 8) and 0xFF
         val b0 = c0 and 0xFF
 
-        val a1 = (c1 ushr 24) and 0xFF
-        val r1c = (c1 ushr 16) and 0xFF
-        val g1 = (c1 ushr 8) and 0xFF
+        val a1 = (c1 shr 24) and 0xFF
+        val r1c = (c1 shr 16) and 0xFF
+        val g1 = (c1 shr 8) and 0xFF
         val b1 = c1 and 0xFF
 
         val a = interpolate(a0, a1, t).toInt().coerceIn(0, 255)
