@@ -6,28 +6,28 @@ class AsyncFuture<T> {
     private var finished = false
 
     fun set(value: T) {
-        synchronized(lock) {
-            if (!finished) {
+//        synchronized(lock) {
+//            if (!finished) {
                 result = value
-                finished = true
-                lock.notifyAll()
-            }
-        }
+//                finished = true
+//                lock.notifyAll()
+//            }
+//        }
     }
 
     fun get(): T {
-        synchronized(lock) {
-            while (!finished) {
-                try {
-                    lock.wait()
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw RuntimeException("Thread interrupted while waiting for result", e)
-                }
-            }
-            @Suppress("UNCHECKED_CAST")
+//        synchronized(lock) {
+//            while (!finished) {
+//                try {
+//                    lock.wait()
+//                } catch (e: InterruptedException) {
+//                    Thread.currentThread().interrupt()
+//                    throw RuntimeException("Thread interrupted while waiting for result", e)
+//                }
+//            }
+//            @Suppress("UNCHECKED_CAST")
             return result as T
-        }
+//        }
     }
 
     fun isFinished(): Boolean {

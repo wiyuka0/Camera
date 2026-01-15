@@ -11,6 +11,7 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import java.io.File
+import java.util.Random
 import javax.imageio.ImageIO
 import kotlin.Array
 
@@ -31,6 +32,7 @@ class TakePicture: CommandExecutor {
                 val start = System.currentTimeMillis()
                 val mixinTimes = p3[3].toInt()
 
+                Random().nextInt(0, 100)
                 cameraInstance.progressBar?.removeAll()
                 if (cameraInstance.progressBar == null) {
                     cameraInstance.progressBar = Bukkit.createBossBar("", BarColor.GREEN, BarStyle.SOLID)
@@ -48,7 +50,8 @@ class TakePicture: CommandExecutor {
                 val fileName = p3[2]
                 if (!file.exists()) file.mkdirs()
 
-                val output = AfterEffect.apply(cameraInstance.bufferedImage, cameraInstance.depthImage, cameraInstance.fov, cameraInstance.progressBar)
+//                val output = AfterEffect.apply(cameraInstance.bufferedImage, cameraInstance.depthImage, cameraInstance.fov, cameraInstance.progressBar)
+                val output = cameraInstance.bufferedImage
 
                 cameraInstance.progressBar?.removeAll()
 

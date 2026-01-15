@@ -1,6 +1,5 @@
 package com.methyleneblue.camera.raytracepack.bvh
 
-import com.methyleneblue.camera.raytracepack.bvh.jocl.JoclInterface
 import org.bukkit.block.BlockFace
 import org.joml.Vector3f
 import kotlin.math.*

@@ -18,7 +18,9 @@ import java.util.*
 import java.util.Map
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
+import kotlin.collections.get
 import kotlin.math.floor
+import kotlin.text.get
 
 object TextureManager {
     private val textureBlockFaceCache = ConcurrentHashMap<Material?, EnumMap<BlockFace?, BufferedImage?>?>()
@@ -47,9 +49,9 @@ object TextureManager {
     }
     private fun initialize() {
 //        texturesPath = File(Bukkit.getPluginsFolder().getPath() + "\\Camera\\textures")
-        texturesPath = File("I:\\downloads\\Downloads\\新建文件夹 (2)\\plugins\\Camera\\textures")
+        texturesPath = File("I:\\downloads\\Downloads\\testserver\\plugins\\Camera\\textures")
 //        normalsPath = File(Bukkit.getPluginsFolder().getPath() + "\\Camera\\normals")
-        normalsPath = File("I:\\downloads\\Downloads\\新建文件夹 (2)\\plugins\\Camera\\normals")
+        normalsPath = File("I:\\downloads\\Downloads\\testserver\\plugins\\Camera\\normals")
 
         if (!texturesPath!!.exists()) {
             // noinspection ResultOfMethodCallIgnored
@@ -136,7 +138,13 @@ object TextureManager {
         return pixels
     }
 
-    fun getMaterialOffset(material: Material): Int = materialOffset[material] ?: 0
+//    fun getMaterialOffset(material: Material): Int = materialOffset[material] ?: 0
+
+    fun getMaterialOffset(material: Material): Int {
+        // 如果找不到，返回 -1，而不是 0
+        return materialOffset[material] ?: -1
+    }
+
 
     private val blockFaceToCLIndex = mapOf(
         BlockFace.WEST  to 0,   // X-
@@ -146,7 +154,33 @@ object TextureManager {
         BlockFace.NORTH to 4,  // Z-
         BlockFace.SOUTH to 5   // Z+
     )
+    fun debugPrintTextureStatus() {
+        println("=== TextureManager Debug ===")
+        println("Loaded Materials count: ${materialOffset.size}")
 
+        // 检查 Stone (石头) 是否存在，通常石头肯定有贴图
+        val stone = Material.STONE
+        val offset = materialOffset[stone]
+        println("Material STONE offset: $offset")
+
+        if (offset != null && offset >= 0) {
+            // 打印该位置前几个像素的颜色值
+            val pixel1 = textureArray[offset]
+            val pixel2 = textureArray[offset + 128]
+            println("Sample Pixel at STONE[0]: ${Integer.toHexString(pixel1)}") // 应该是 FFxxxxxx
+            println("Sample Pixel at STONE[128]: ${Integer.toHexString(pixel2)}")
+        } else {
+            println("!!! CRITICAL: STONE texture not found in map!")
+        }
+
+        // 检查数组是否全为 0
+        var nonZeroCount = 0
+        for (i in textureArray.indices) {
+            if (textureArray[i] != 0) nonZeroCount++
+        }
+        println("Total Non-Zero Ints in Array: $nonZeroCount / ${textureArray.size}")
+        println("============================")
+    }
     fun prepareTextureBuffer() {
         var currentIndex = 0
         Material.entries.forEach { material ->

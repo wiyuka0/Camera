@@ -1,7 +1,10 @@
 package com.methyleneblue.camera.command
 
 import com.methyleneblue.camera.CameraManager
+import com.methyleneblue.camera.obj.BetterRTCamera
+import com.methyleneblue.camera.obj.CLRTCamera
 import com.methyleneblue.camera.obj.EffectBasedCamera
+import com.methyleneblue.camera.obj.NormalCamera
 import com.methyleneblue.camera.obj.RayTraceCamera
 import com.methyleneblue.camera.obj.SingleRayTraceCamera
 import org.bukkit.command.Command
@@ -43,6 +46,46 @@ class CameraCommand: CommandExecutor {
                 player.sendMessage("Generated Camera Id $cameraId")
                 true
             }
+            "rt2" -> {
+                val cameraInstance = BetterRTCamera(
+                    player.eyeLocation,
+                    width to height,
+                    fov.toDouble(),
+                    distance,
+                    null,
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
+                )
+
+                var cameraId = -1
+                cameraId = if(index != -1) {
+                    CameraManager.addCameraByIndex(cameraInstance, index)
+                }else {
+                    CameraManager.addCamera(cameraInstance)
+                }
+                player.sendMessage("Generated Camera Id $cameraId")
+                true
+            }
+            "rtcl" -> {
+                val cameraInstance = CLRTCamera(
+                    player.eyeLocation,
+                    width to height,
+                    fov.toDouble(),
+                    distance,
+                    null,
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
+                )
+
+                var cameraId = -1
+                cameraId = if(index != -1) {
+                    CameraManager.addCameraByIndex(cameraInstance, index)
+                }else {
+                    CameraManager.addCamera(cameraInstance)
+                }
+                player.sendMessage("Generated Camera Id $cameraId")
+                true
+            }
             "raytrace" -> {
                 val cameraInstance = RayTraceCamera(
                     player.eyeLocation,
@@ -61,6 +104,26 @@ class CameraCommand: CommandExecutor {
                     CameraManager.addCamera(cameraInstance)
                 }
                 player.sendMessage("Generated Camera Id $cameraId")
+                true
+            }
+            "normal" -> {
+                val cameraInstance = NormalCamera(
+                    player.eyeLocation,
+                    width to height,
+                    fov.toDouble(),
+                    distance,
+                    null,
+                    BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
+                    arrayOf(),
+                )
+                var cameraId = -1
+                cameraId = if(index != -1) {
+                    CameraManager.addCameraByIndex(cameraInstance, index)
+                }else {
+                    CameraManager.addCamera(cameraInstance)
+                }
+                player.sendMessage("Generated Camera Id $cameraId")
+
                 true
             }
             "sraytrace" -> {

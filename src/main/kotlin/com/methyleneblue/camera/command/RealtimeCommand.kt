@@ -1,10 +1,13 @@
 package com.methyleneblue.camera.command
 
+import com.methyleneblue.camera.obj.Realtime
+import com.methyleneblue.camera.obj.Realtime.RealtimeData
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 
-class RecompileKernel: CommandExecutor {
+class RealtimeCommand: CommandExecutor {
     override fun onCommand(
         p0: CommandSender,
         p1: Command,
@@ -12,7 +15,7 @@ class RecompileKernel: CommandExecutor {
         p3: Array<out String>
     ): Boolean {
 
-        p0.sendMessage("Kernel recompiled.")
+        Realtime.addMember(p0 as Player)
         return true
     }
 }

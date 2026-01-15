@@ -37,9 +37,23 @@ class BVHTree {
         }
 
         fun getBVHTree(location: Location, distance: Int): BVHTree {
+            val bvh = BVHTree()
+            val blocks = nearbyBlocks(location, distance)
+
+            for (block in blocks) {
+                bvh.addBlock(Vector3i(block.location.toBlockLocation().x.toInt(), block.location.toBlockLocation().y.toInt(), block.location.toBlockLocation().z.toInt()), material = block.type, bukkitBlock = block)
+            }
+            bvh.buildTree()
+            return bvh
+        }
+
+        private fun nearbyBlocks(
+            location: Location,
+            distance: Int
+        ): MutableList<org.bukkit.block.Block> {
             val origin = location.block
 
-            val bvhTree = BVHTree()
+            val result = mutableListOf<org.bukkit.block.Block>()
             val visited = mutableSetOf<org.bukkit.block.Block>()
             val queue: Queue<org.bukkit.block.Block> = LinkedList()
 
@@ -61,12 +75,7 @@ class BVHTree {
 
                 // 添加非空气方块
                 if (current.type != Material.AIR) {
-                    bvhTree.addBlock(
-                        location = Vector3i(curLoc.x.toInt(), curLoc.y.toInt(), curLoc.z.toInt()),
-                        material = current.type,
-                        scale = Vector3f(1f, 1f, 1f),
-                        bukkitBlock = current
-                    )
+                    result.add(current)
                 }
 
                 for ((dx, dy, dz) in directions) {
@@ -80,8 +89,7 @@ class BVHTree {
                     }
                 }
             }
-            bvhTree.buildTree()
-            return bvhTree
+            return result
         }
     }
 }

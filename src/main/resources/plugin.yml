@@ -10,3 +10,6 @@ commands:
   cameracommand:
 
   recompilekernel:
+
+  realtime:
+    

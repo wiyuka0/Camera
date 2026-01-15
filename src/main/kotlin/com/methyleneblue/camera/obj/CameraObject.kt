@@ -6,7 +6,7 @@ import org.bukkit.entity.Player
 import java.awt.image.BufferedImage
 
 abstract class CameraObject(
-    val location: Location,
+    var location: Location,
     val size: Pair<Int, Int>,
     val fov: Double,
     val distance: Double,

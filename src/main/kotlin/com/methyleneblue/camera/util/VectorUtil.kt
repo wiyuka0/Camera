@@ -65,6 +65,24 @@ object VectorUtil {
         return Math.toDegrees(acos(clampedCos.toDouble())).toFloat()
     }
 
+    val faceToNormalArray = Array(BlockFace.entries.size) { Vector3f() }
+
+    init {
+        faceToNormalArray[BlockFace.UP.ordinal] = Vector3f(0f, 1f, 0f)
+        faceToNormalArray[BlockFace.DOWN.ordinal] = Vector3f(0f, -1f, 0f)
+        faceToNormalArray[BlockFace.NORTH.ordinal] = Vector3f(0f, 0f, -1f)
+        faceToNormalArray[BlockFace.SOUTH.ordinal] = Vector3f(0f, 0f, 1f)
+        faceToNormalArray[BlockFace.EAST.ordinal] = Vector3f(1f, 0f, 0f)
+        faceToNormalArray[BlockFace.WEST.ordinal] = Vector3f(-1f, 0f, 0f)
+
+        faceToNormalArray[BlockFace.NORTH_EAST.ordinal] = Vector3f(1f, 0f, -1f).normalize()
+        faceToNormalArray[BlockFace.NORTH_WEST.ordinal] = Vector3f(-1f, 0f, -1f).normalize()
+        faceToNormalArray[BlockFace.SOUTH_EAST.ordinal] = Vector3f(1f, 0f, 1f).normalize()
+        faceToNormalArray[BlockFace.SOUTH_WEST.ordinal] = Vector3f(-1f, 0f, 1f).normalize()
+        faceToNormalArray[BlockFace.SELF.ordinal] = Vector3f(0f, 0f, 0f).normalize()
+    }
+
+
     val faceToNormalMap = hashMapOf<BlockFace, Vector3f>().apply {
         this[BlockFace.UP] = Vector3f(0f, 1f, 0f)
         this[BlockFace.DOWN] = Vector3f(0f, -1f, 0f)
@@ -101,7 +119,7 @@ object VectorUtil {
     }
 
     fun perturbDirection(base: Vector3f, spread: Float, output: Vector3f): Vector3f {
-        require(spread in 0.0..1.0) // 不对啊，赋值了啊
+        require(spread in 0.0..1.0)
 
         if (spread == 0.0f) {
             output.apply {
@@ -151,17 +169,30 @@ object VectorUtil {
         val rng = ThreadLocalRandom.current()
         val vec = threadVec.get()
 
-        while (true) {
-            val x = rng.nextFloat(-1f, 1f)
-            val y = rng.nextFloat(-1f, 1f)
-            val z = rng.nextFloat(-1f, 1f)
-            val lenSq = x * x + y * y + z * z
-            if (lenSq in 1e-5f..1f) {
-                val invLen = 1f / sqrt(lenSq)
-                return vec.set(x * invLen, y * invLen, z * invLen)
-            }
-        }
+        val z = rng.nextFloat(-1f, 1f)                  // z ∈ [-1,1]
+        val t = rng.nextFloat(0f, 2f * PI.toFloat())    // θ ∈ [0,2π)
+        val r = sqrt(1f - z * z)                        // 半径投影到 xy 平面
+
+        val x = r * cos(t)
+        val y = r * sin(t)
+
+        return vec.set(x, y, z)
     }
+//    fun randomUnitVector(): Vector3f {
+//        val rng = ThreadLocalRandom.current()
+//        val vec = threadVec.get()
+//
+//        while (true) {
+//            val x = rng.nextFloat(-1f, 1f)
+//            val y = rng.nextFloat(-1f, 1f)
+//            val z = rng.nextFloat(-1f, 1f)
+//            val lenSq = x * x + y * y + z * z
+//            if (lenSq in 1e-5f..1f) {
+//                val invLen = 1f / sqrt(lenSq)
+//                return vec.set(x * invLen, y * invLen, z * invLen)
+//            }
+//        }
+//    }
 
     // Rotates a vector from Z+ to targetDir 哪个类 ReflectionMaterial
     fun rotateVectorFromZAxis(vec: Vector3f, targetDir: Vector3f): Vector3f {
